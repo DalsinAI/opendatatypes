@@ -53,7 +53,7 @@ for build in "-O0 -m68000" "-O2 -m68000" "-O0 -m68020" "-O2 -m68020" "-O0 -m6804
         "$here/opendatatypes_textanim_test.c" $objs -o "$tmp/t"
     if command -v "$qemu" >/dev/null; then
         # at most two minutes and 8 MB of log a run
-        { timeout 120 "$qemu" -cpu m68040 "$tmp/t" "$tmp/script.txt"; echo $? > "$tmp/rc"; } |
+        { rc_=0; timeout 120 "$qemu" -cpu m68040 "$tmp/t" "$tmp/script.txt" || rc_=$?; echo $rc_ > "$tmp/rc"; } |
             head -c 8000000 > "$tmp/out.txt"
         if [ "$(cat "$tmp/rc")" != 0 ]; then
             echo "FAIL $build: the run failed (exit $(cat "$tmp/rc"))"; tail -5 "$tmp/out.txt"; fail=1; continue
