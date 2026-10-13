@@ -138,7 +138,7 @@ static void notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo 
 #define PN_TAKEN     4                  /* the last process is disposing it (with the bits it took) */
 #define PN_OWNED     8                  /* a dispose from outside the notifications is disposing it */
 #define PN_OWNED_DT  16                 /* ... and it is DisposeDTObject, which frees the record */
-#define PN_RECORD    32                 /* the record's free has been handed to a caller */
+#define PN_RECORD    32                 /* the record's free is settled */
 #define PN_BUSY      (PN_OWNED | PN_TAKEN)
 struct proc_note {
     struct proc_note *next;
@@ -933,15 +933,13 @@ static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpL
  * process's, is done by the object's last process, once: OM_DISPOSE from
  * datatypesclass up (the subclasses having had theirs), and the library's
  * record left to the caller (DisposeDTObject: *dispose). An earlier
- * process asks the others to stop and leaves it. When a task outside owns
- * the dispose with OM_DISPOSE alone, a notification's DisposeDTObject
- * leaves the last process the record. */
+ * process asks the others to stop and leaves it. */
 static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
 {
     struct odt_dtinst *d = ODT_DTINST(env, obj);
     struct odt_IClass *cl;
     odt_u32 m = ODT_OM_DISPOSE;
-    int what = 0, last, record = 0;
+    int what = 0, last;
     odt_u16 p;
     env->sem_obtain(env, &d->si.si_Lock);
     p = d->dispose_pending;
@@ -952,12 +950,7 @@ static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
     }
     last = d->procs <= 1;
     if (d->procs) d->procs--;
-    if (last && (p & PN_OWNED)) {
-        if ((p & PN_DTDISPOSE) && !(p & (PN_OWNED_DT | PN_RECORD))) {
-            d->dispose_pending |= PN_RECORD;
-            record = 1;
-        }
-    } else if (last && p) {
+    if (last && p && !(p & PN_OWNED)) {
         /* a dispose from elsewhere from now on joins this one */
         what = p;
         d->dispose_pending |= PN_TAKEN;
@@ -974,8 +967,7 @@ static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
         env->do_super(env, cl, obj, &m);
     }
     if (!dispose) return;
-    if (record) *dispose = ODT_DISPOSE_RECORD;
-    else if (what & PN_DTDISPOSE) *dispose = what & PN_DISPOSE ? ODT_DISPOSE_RECORD : ODT_DISPOSE_ALL;
+    if (what & PN_DTDISPOSE) *dispose = what & PN_DISPOSE ? ODT_DISPOSE_RECORD : ODT_DISPOSE_ALL;
 }
 
 /* The layout process's work, proc_lock held (odt_proc_hold) until after
@@ -997,9 +989,8 @@ odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayou
  *   and that process's caller (odt_layout_run's or odt_print_run's
  *   *dispose) does it then: 1.
  * - While one is under way (the last process's, or another task's): joined,
- *   1; but when the one under way is OM_DISPOSE alone, the record is the
- *   caller's to free: ODT_DISPOSE_RECORD (from inside a notification, the
- *   last process's, through *dispose).
+ *   1; but when the last process's is OM_DISPOSE alone, the record is the
+ *   caller's to free: ODT_DISPOSE_RECORD.
  * - Otherwise the caller disposes it all now, and is its disposer: 0. */
 int odt_dispose_later(const struct odt_cenv *env, void *obj)
 {
@@ -1013,13 +1004,14 @@ int odt_dispose_later(const struct odt_cenv *env, void *obj)
     pn = own_note_locked(env, d);
     p = d->dispose_pending;
     if (p & PN_BUSY) {
-        if (!(p & (PN_OWNED_DT | PN_DTDISPOSE | PN_RECORD))) {
-            d->dispose_pending |= PN_DTDISPOSE;
-            if (!pn) {
-                d->dispose_pending |= PN_RECORD;
-                r = ODT_DISPOSE_RECORD;
-            }
-        }
+        /* after the last process's OM_DISPOSE alone, the record is the
+         * caller's: that dispose runs in datatypes.library, past the class.
+         * An outside DisposeObject (PN_OWNED alone) may still be in the
+         * class's code, so its record stays: a program that disposes a
+         * datatype object with DisposeObject and DisposeDTObject both
+         * keeps the class library open. */
+        if ((p & PN_TAKEN) && !(p & (PN_DTDISPOSE | PN_RECORD))) r = ODT_DISPOSE_RECORD;
+        d->dispose_pending |= PN_DTDISPOSE | PN_RECORD;
     } else if (pn || p) {
         d->dispose_pending |= PN_DTDISPOSE;
     } else {
