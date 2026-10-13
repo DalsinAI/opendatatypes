@@ -3,7 +3,9 @@
 # the NDK 3.2 datatypes_lib.fd in the stove and stops on any difference;
 # opendatatypes_lib.c's lib_vectors[] follows it line for line.
 # NDK 3.2 keeps -120..-132 private and nothing public from -144 to -252
-# (the V45 calls start at -258); those slots answer 0 here.
+# (the V45 calls start at -258). Ours fill some as the comments say (where
+# the V44/V45 headers had those calls: an ABI test PROBE records what OS
+# 3.2 has there); the rest answer 0.
 -30 private
 -36 ObtainDataTypeA d0,a0,a1
 -42 ReleaseDataType a0
@@ -19,13 +21,13 @@
 -102 GetDTMethods a0
 -108 GetDTTriggerMethods a0
 -114 PrintDTObjectA a0,a1,a2,a3
--120 private
--126 private
--132 private
+-120 private    # ours: ObtainDTDrawInfoA a0,a1 (V44)
+-126 private    # ours: DrawDTObjectA a0,a1,d0,d1,d2,d3,d4,d5,a2 (V44)
+-132 private    # ours: ReleaseDTDrawInfo a0,a1 (V44)
 -138 GetDTString d0
--144 private
--150 private
--156 private
+-144 private    # ours: LockDataType a0 (V45)
+-150 private    # ours: FindToolNodeA a0,a1 (V45)
+-156 private    # ours: LaunchToolA a0,a1,a2 (V45)
 -162 private
 -168 private
 -174 private
@@ -41,7 +43,7 @@
 -234 private
 -240 private
 -246 private
--252 private
+-252 private    # ours: OpenDatatypes AddDataTypes a0,d0,a1 (our AddDataTypes command)
 -258 FindMethod a0,a1
 -264 FindTriggerMethod a0,a1,d0
 -270 CopyDTMethods a0,a1,a2

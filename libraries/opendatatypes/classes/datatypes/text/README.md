@@ -1,0 +1,48 @@
+# text.datatype and ascii.datatype
+
+Open versions of OS 3.2's `text.datatype` (a subclass of datatypesclass)
+and `ascii.datatype` (a minimal subclass of it). Version 47.100. The
+side-by-side builds are `opentext.datatype` and `openascii.datatype`, and
+`openascii` sits on `opentext`. They are written from the NDK 3.2 headers,
+the autodocs and measured behaviour only.
+
+| File | What |
+|---|---|
+| `text_core.c/.h` | Plain C core, no Amiga headers: TDTA_ attributes, line list, ANSI styles, tabs, word wrap, selection, DTM_COPY/DTM_WRITE (raw and FTXT), word select, render |
+| `dtc_util.h` | Tag, list and OM_GET helpers shared by the four classes |
+| `dtc_shell.h` | Amiga shell: env over BOOPSI, exec, dos, iffparse, layers; RomTag, MakeClass/AddClass, one LVO (`ObtainEngine`, -30) |
+| `opentext_class.c` | text.datatype's shell: fonts, TextLength/Text/RectFill, clip region, DrawInfo pens, DoubleClick |
+| `../ascii/ascii_core.c/.h` | ascii.datatype: reads FILE, MEMORY, clipboard/IFF (FTXT CHRS) and RAM sources into TDTA_Buffer |
+| `../ascii/openascii_class.c` | ascii.datatype's shell |
+| `build-amiga.sh`, `build-family.sh` | Builds all four classes and their ABI tests (stove) |
+| `tests/TextClassABITest.c` | OS 3.2's ascii.datatype next to openascii.datatype |
+
+The qemu test is `tests/m68k/test_opendatatypes_textanim.sh`, against the
+python model `tests/m68k/opendatatypes_textanim_ref.py`.
+
+## Edge cases
+
+| Case | What we do | Source |
+|---|---|---|
+| Line ends | LF, CR and CRLF each end one row | ABI test |
+| Tabs | Stop every 8 space widths, measured from the line's left edge | ABI test |
+| ANSI | `ESC[` and CSI (0x9b) SGR: 0, 1, 3, 4, 22-24, 30-37, 39, 40-47, 49; other sequences are dropped | ABI test |
+| Word wrap | Breaks at a space (eaten), else after a delimiter, else mid-word when one word is wider than the view | measured |
+| Default delimiters | `"\t *-,<>()[];\""` | ABI test |
+| TDTA_Buffer on OM_SET | Copied; the caller's buffer may go away | documented |
+| DTM_COPY with nothing selected | Copies the whole text | ABI test |
+| Copied text | Tabs and line ends are rebuilt, ANSI is not | measured |
+| DTM_WRITE DTWM_IFF | FORM FTXT with one CHRS | documented |
+| Units | VertUnit = font height, HorizUnit = font width | measured |
+| Double click | Selects the word under the pointer, then the superclass's GM_GOACTIVE | measured |
+| Empty file | Opens, with no lines | ABI test |
+| Busy layout | GM_RENDER skips when the layout semaphore is held | measured |
+
+## Not yet
+
+- DTM_PRINT, and the `printer.device` path.
+- ScrollRaster on scrolling: we redraw the whole view.
+- Links (LNF_LINK) and embedded objects (LNF_OBJECT) are never made.
+- Charset conversion (only bytes in, bytes out).
+- The shells and ABI tests are not yet built or run on the stove; the cores
+  are tested under qemu (m68k-linux-gnu-gcc 13, -O0/-O2 for 68000/68020/68040).

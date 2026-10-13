@@ -1,0 +1,54 @@
+; sys/datatypes.catalog: the strings GetDTString gives, by their ids.
+; OpenDatatypes (datatypes.library 47.100). Copyright (c) 2026 Dalsin Limited. MIT.
+; The English strings are the library's built-in ones (dt_core.c); a
+; translation is a .ct of this file, built with any catalog compiler and
+; put in LOCALE:Catalogs/<language>/sys/datatypes.catalog.
+; The ids are DTERROR_ (2000-2009), DTMSG_TYPE_OFFSET + DTF_ (2100-2103)
+; and the GID_ group ids (four letters as one number).
+
+DTERROR_UNKNOWN_DATATYPE (2000//)
+Unknown data type for %s
+DTERROR_COULDNT_SAVE (2001//)
+Couldn't save %s
+DTERROR_COULDNT_OPEN (2002//)
+Couldn't open %s
+DTERROR_COULDNT_SEND_MESSAGE (2003//)
+Couldn't send message
+DTERROR_COULDNT_OPEN_CLIPBOARD (2004//)
+Couldn't open clipboard
+DTERROR_RESERVED (2005//)
+Unknown data type
+DTERROR_UNKNOWN_COMPRESSION (2006//)
+Unknown compression type
+DTERROR_NOT_ENOUGH_DATA (2007//)
+Not enough data
+DTERROR_INVALID_DATA (2008//)
+Invalid data
+DTERROR_NOT_AVAILABLE (2009//)
+Data not available
+DTMSG_TYPE_BINARY (2100//)
+Binary
+DTMSG_TYPE_ASCII (2101//)
+ASCII
+DTMSG_TYPE_IFF (2102//)
+IFF
+DTMSG_TYPE_MISCELLANEOUS (2103//)
+Miscellaneous
+GID_SYSTEM (1937339252//)
+System
+GID_TEXT (1952807028//)
+Text
+GID_DOCUMENT (1685021557//)
+Document
+GID_SOUND (1936684398//)
+Sound
+GID_INSTRUMENT (1768846196//)
+Instrument
+GID_MUSIC (1836413801//)
+Music
+GID_PICTURE (1885954932//)
+Picture
+GID_ANIMATION (1634625901//)
+Animation
+GID_MOVIE (1836021353//)
+Movie

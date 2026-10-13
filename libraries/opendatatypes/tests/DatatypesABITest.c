@@ -23,7 +23,12 @@
  *
  * Before each call into a library it writes "@ call" and flushes (QUIET: not).
  *
- *   DatatypesABITest [PROBE] [DESC] [LIST] [QUIET] [LIB=dir] [DIR=dir] [SCAN=dir] [HOOK=file]
+ * With OBJ, the object calls (step D2): objects made from a text, an
+ * ILBM and bytes written to T:, from memory, the clipboard and DTST_RAM
+ * for each group; their attributes, classes, methods, DTM_WRITE,
+ * SaveDTObjectA, StartDragSelect; and which private slots hold code.
+ *
+ *   DatatypesABITest [PROBE] [DESC] [OBJ] [LIST] [QUIET] [LIB=dir] [DIR=dir] [SCAN=dir] [HOOK=file]
  * HOOK=file puts that load file in ODT_Hook in place of the built-in probe code.
  * Exit 0 when nothing differs, 5 when something does, 20 on an error.
  */
@@ -37,7 +42,11 @@
 #include <datatypes/datatypes.h>
 #include <datatypes/datatypesclass.h>
 #include <utility/tagitem.h>
+#include <intuition/intuition.h>
+#include <intuition/classes.h>
+#include <libraries/iffparse.h>
 #include <proto/exec.h>
+#include <proto/iffparse.h>
 #include <proto/dos.h>
 #include <proto/datatypes.h>
 #include <stdio.h>
@@ -816,9 +825,272 @@ static void list_dump(void)
     ReleaseSemaphore(ss);
 }
 
+/* ---- OBJ: the object calls and datatypesclass (step D2) ----------------------- */
+
+/* Data files made here (no copyrighted media): a text, a 4x2 ILBM of one
+ * plane, bytes nothing claims; the clipboard gets an FTXT. Each answer is
+ * a line without addresses. */
+static const UBYTE ilbm_bytes[] = {
+    'F','O','R','M', 0,0,0,74, 'I','L','B','M',
+    'B','M','H','D', 0,0,0,20, 0,4, 0,2, 0,0, 0,0, 1, 0, 0, 0, 0,0, 10,11, 0,4, 0,2,
+    'C','M','A','P', 0,0,0,6, 0,0,0, 255,255,255,
+    'B','O','D','Y', 0,0,0,4, 0xa0,0, 0x50,0,
+    'A','N','N','O', 0,0,0,8, 'o','d','t',' ','a','b','i',0
+};
+static const char text_bytes[] = "OpenDatatypes ABI test\nline two\nline three\n";
+static const char *const obj_text = "T:ODT_text.txt";
+static const char *const obj_ilbm = "T:ODT_pic.ilbm";
+static const char *const obj_bin = "T:ODT_bytes.bin";
+
+static void write_file(const char *name, const void *p, LONG n)
+{
+    BPTR fh = Open(name, MODE_NEWFILE);
+    if (fh) { Write(fh, (APTR)p, n); Close(fh); }
+}
+
+static LONG file_size(const char *name)
+{
+    BPTR l = Lock(name, ACCESS_READ);
+    struct FileInfoBlock *fib = AllocDosObject(DOS_FIB, NULL);
+    LONG n = -1;
+    if (l && fib && Examine(l, fib)) n = fib->fib_Size;
+    if (fib) FreeDosObject(DOS_FIB, fib);
+    if (l) UnLock(l);
+    return n;
+}
+
+static void obj_class(Object *o)
+{
+    struct IClass *cl;
+    out(" classes");
+    for (cl = OCLASS(o); cl; cl = cl->cl_Super) {
+        const char *id = cl->cl_ID ? (const char *)cl->cl_ID : "(private)";
+        /* the twin's own class answers as OS 3.2's does */
+        if (!strcmp(id, "opendatatypesclass")) id = "datatypesclass";
+        out(" %s", id);
+    }
+}
+
+static void obj_attrs(const char *what, Object *o)
+{
+    ULONG tv = 7, vv = 7, tov = 7, th = 7, vh = 7, toh = 7, vu = 7, hu = 7, st = 7, h = 7, dt = 7, dom = 7;
+    ULONG busy = 7, sync = 7, methods = 0, trig = 7, nothing = 7, name = 7, gid = 7, base = 7, fi = 7;
+    ULONG n;
+    struct Gadget *g = (struct Gadget *)o;
+    struct DTSpecialInfo *si = g->SpecialInfo;
+    step("GetDTAttrs %s", what);
+    n = GetDTAttrs(o, DTA_TopVert, (ULONG)&tv, DTA_VisibleVert, (ULONG)&vv, DTA_TotalVert, (ULONG)&tov,
+                   DTA_TopHoriz, (ULONG)&th, DTA_VisibleHoriz, (ULONG)&vh, DTA_TotalHoriz, (ULONG)&toh,
+                   DTA_VertUnit, (ULONG)&vu, DTA_HorizUnit, (ULONG)&hu, DTA_SourceType, (ULONG)&st,
+                   DTA_Handle, (ULONG)&h, DTA_DataType, (ULONG)&dt, DTA_Domain, (ULONG)&dom, DTA_Busy, (ULONG)&busy,
+                   DTA_Sync, (ULONG)&sync, DTA_Methods, (ULONG)&methods, DTA_TriggerMethods, (ULONG)&trig,
+                   TAG_USER + 0x7700099UL, (ULONG)&nothing, DTA_Name, (ULONG)&name, DTA_GroupID, (ULONG)&gid,
+                   DTA_BaseName, (ULONG)&base, DTA_FrameInfo, (ULONG)&fi, TAG_DONE);
+    out("OBJ %s getattrs %lu: top %ld/%ld vis %ld/%ld tot %ld/%ld unit %ld/%ld st %lu handle %s dt %s domain %s"
+        " busy %lu sync %lu trig %s nothing %lu name %s gid ", what, (unsigned long)n, (long)tv, (long)th,
+        (long)vv, (long)vh, (long)tov, (long)toh, (long)vu, (long)hu, (unsigned long)st,
+        h == 7 ? "unset" : h ? "set" : "NULL", dt == 7 ? "unset" : dt ? "set" : "NULL",
+        dom == 7 ? "unset" : dom ? "set" : "NULL", (unsigned long)busy, (unsigned long)sync,
+        trig == 7 ? "unset" : trig ? "set" : "NULL", (unsigned long)nothing,
+        name == 7 ? "unset" : name ? "set" : "NULL");
+    id4(gid);
+    out(" base %s fi %s si %s", base == 7 || !base ? "-" : (const char *)base, fi == 7 ? "unset" : fi ? "set" : "NULL",
+        si ? "set" : "NULL");
+    if (si) out(" siflags %08lx units %ld/%ld", (unsigned long)si->si_Flags, (long)si->si_VertUnit, (long)si->si_HorizUnit);
+    obj_class(o);
+    out("\nOBJ %s methods", what);
+    if (methods) {
+        const ULONG *m;
+        for (m = (const ULONG *)methods; *m != ~0UL; m++) out(" %lx", (unsigned long)*m);
+    }
+    out(" gadget flags %04x act %04x type %04x\n", g->Flags, g->Activation, g->GadgetType);
+}
+
+static Object *obj_new(const char *what, APTR name, ULONG tag1, ...)
+{
+    Object *o;
+    va_list ap;
+    struct TagItem t[8];
+    int i = 0;
+    ULONG tag = tag1;
+    va_start(ap, tag1);
+    while (tag != TAG_DONE && i < 7) {
+        t[i].ti_Tag = tag;
+        t[i++].ti_Data = va_arg(ap, ULONG);
+        tag = va_arg(ap, ULONG);
+    }
+    va_end(ap);
+    t[i].ti_Tag = TAG_DONE;
+    step("NewDTObject %s", what);
+    SetIoErr(0);
+    o = NewDTObjectA(name, t);
+    last_err = IoErr();
+    out("OBJ %s new %s ioerr %ld", what, o ? "ok" : "NULL", (long)last_err);
+    if (o) obj_class(o);
+    out("\n");
+    return o;
+}
+
+static void obj_dispose(const char *what, Object *o)
+{
+    if (!o) return;
+    step("DisposeDTObject %s", what);
+    DisposeDTObject(o);
+}
+
+static void obj_file_cases(const char *what, const char *file)
+{
+    Object *o = obj_new(what, (APTR)file, TAG_DONE);
+    ULONG r, tv = 7;
+    struct dtWrite w;
+    BPTR fh;
+    if (!o) return;
+    obj_attrs(what, o);
+    step("SetDTAttrs %s top", what);
+    r = SetDTAttrs(o, NULL, NULL, DTA_TopVert, 1000, DTA_TopHoriz, (ULONG)-5, TAG_DONE);
+    GetDTAttrs(o, DTA_TopVert, (ULONG)&tv, TAG_DONE);
+    out("OBJ %s settop %lu then %ld\n", what, (unsigned long)r, (long)tv);
+    step("StartDragSelect %s", what);
+    out("OBJ %s startdragselect %lu", what, (unsigned long)StartDragSelect(o));
+    out(" again %lu\n", (unsigned long)StartDragSelect(o));
+    step("GetDTMethods %s", what);
+    out("OBJ %s getdtmethods %s triggers %s\n", what, GetDTMethods(o) ? "set" : "NULL", GetDTTriggerMethods(o) ? "set" : "NULL");
+    step("DTM_WRITE raw %s", what);
+    if ((fh = Open("T:ODT_out", MODE_NEWFILE))) {
+        w.MethodID = DTM_WRITE; w.dtw_GInfo = NULL; w.dtw_FileHandle = fh; w.dtw_Mode = DTWM_RAW; w.dtw_AttrList = NULL;
+        SetIoErr(0);
+        r = DoDTMethodA(o, NULL, NULL, (Msg)&w);
+        last_err = IoErr();
+        Close(fh);
+        out("OBJ %s write raw %lu ioerr %ld size %ld\n", what, (unsigned long)r, (long)last_err, (long)file_size("T:ODT_out"));
+    }
+    step("SaveDTObjectA %s", what);
+    DeleteFile("T:ODT_save");
+    SetIoErr(0);
+    r = SaveDTObjectA(o, NULL, NULL, "T:ODT_save", DTWM_RAW, FALSE, NULL);
+    last_err = IoErr();
+    out("OBJ %s save raw %lu ioerr %ld size %ld\n", what, (unsigned long)r, (long)last_err, (long)file_size("T:ODT_save"));
+    step("DTM_CLEARSELECTED %s", what);
+    out("OBJ %s clearselected %lu\n", what, (unsigned long)DoDTMethod(o, NULL, NULL, DTM_CLEARSELECTED, NULL));
+    obj_dispose(what, o);
+}
+
+/* where each slot jumps: the private slots told apart from the null one */
+static void obj_slots(void)
+{
+    static const int slots[] = { 30, 120, 126, 132, 144, 150, 156, 162, 168, 174, 180, 186, 192, 198, 204, 210,
+                                 216, 222, 228, 234, 240, 246, 252 };
+    const UBYTE *b = (const UBYTE *)DataTypesBase;
+    ULONG null_at = 0;
+    unsigned i;
+    out("OBJ slots");
+    for (i = 0; i < sizeof slots / sizeof slots[0]; i++) {
+        const UBYTE *v = b - slots[i];
+        ULONG at = (v[0] == 0x4e && v[1] == 0xf9) ? ((ULONG)v[2] << 24 | (ULONG)v[3] << 16 | (ULONG)v[4] << 8 | v[5]) : 0;
+        if (i == 0) null_at = at;
+        out(" -%d:%s", slots[i], !at ? "?" : i && at == null_at ? "null" : "own");
+    }
+    out("\n");
+}
+
+static void obj_clip(void)
+{
+    struct IFFHandle *iff;
+    struct ClipboardHandle *ch;
+    struct Library *IFFParseBase = OpenLibrary("iffparse.library", 39);
+    Object *o;
+    if (!IFFParseBase) return;
+    step("clipboard FTXT");
+    if ((iff = AllocIFF())) {
+        if ((ch = OpenClipboard(0))) {
+            iff->iff_Stream = (ULONG)ch;
+            InitIFFasClip(iff);
+            if (!OpenIFF(iff, IFFF_WRITE)) {
+                PushChunk(iff, MAKE_ID('F','T','X','T'), ID_FORM, IFFSIZE_UNKNOWN);
+                PushChunk(iff, 0, MAKE_ID('C','H','R','S'), IFFSIZE_UNKNOWN);
+                WriteChunkBytes(iff, (APTR)"clip text", 9);
+                PopChunk(iff);
+                PopChunk(iff);
+                CloseIFF(iff);
+            }
+            CloseClipboard(ch);
+        }
+        FreeIFF(iff);
+    }
+    o = obj_new("clip", (APTR)0, DTA_SourceType, DTST_CLIPBOARD, TAG_DONE);
+    if (o) obj_attrs("clip", o);
+    obj_dispose("clip", o);
+    /* ObtainDataTypeA with an IFFHandle on the clipboard */
+    if ((iff = AllocIFF())) {
+        if ((ch = OpenClipboard(0))) {
+            iff->iff_Stream = (ULONG)ch;
+            InitIFFasClip(iff);
+            if (!OpenIFF(iff, IFFF_READ)) {
+                struct DataType *dt;
+                step("ObtainDataTypeA clipboard");
+                SetIoErr(0);
+                dt = ObtainDataTypeA(DTST_CLIPBOARD, iff, NULL);
+                last_err = IoErr();
+                out("OBJ obtain clipboard"); out_dt(dt); out("\n");
+                if (dt) ReleaseDataType(dt);
+                CloseIFF(iff);
+            }
+            CloseClipboard(ch);
+        }
+        FreeIFF(iff);
+    }
+    CloseLibrary(IFFParseBase);
+}
+
+static void obj_cases(void)
+{
+    static const struct { const char *what; ULONG gid; } rams[] = {
+        { "ram-pict", GID_PICTURE }, { "ram-soun", GID_SOUND }, { "ram-inst", GID_INSTRUMENT },
+        { "ram-text", GID_TEXT }, { "ram-anim", GID_ANIMATION }, { "ram-movi", GID_MOVIE },
+        { "ram-docu", GID_DOCUMENT }, { "ram-syst", GID_SYSTEM }, { "ram-musi", GID_MUSIC },
+    };
+    unsigned i;
+    Object *o;
+    write_file(obj_text, text_bytes, sizeof text_bytes - 1);
+    write_file(obj_ilbm, ilbm_bytes, sizeof ilbm_bytes);
+    {
+        UBYTE b[300];
+        for (i = 0; i < sizeof b; i++) b[i] = (UBYTE)(i * 37 + 0x81);
+        write_file(obj_bin, b, sizeof b);
+    }
+    obj_slots();
+    obj_file_cases("text", obj_text);
+    obj_file_cases("ilbm", obj_ilbm);
+    obj_dispose("missing", obj_new("missing", (APTR)"T:ODT_no_such_file", TAG_DONE));
+    obj_dispose("bytes", obj_new("bytes", (APTR)obj_bin, TAG_DONE));
+    obj_dispose("wronggroup", obj_new("wronggroup", (APTR)obj_ilbm, DTA_GroupID, GID_SOUND, TAG_DONE));
+    obj_dispose("rightgroup", obj_new("rightgroup", (APTR)obj_ilbm, DTA_GroupID, GID_PICTURE, TAG_DONE));
+    obj_dispose("noname", obj_new("noname", NULL, TAG_DONE));
+    obj_dispose("hotlink", obj_new("hotlink", (APTR)obj_text, DTA_SourceType, DTST_HOTLINK, TAG_DONE));
+    for (i = 0; i < sizeof rams / sizeof rams[0]; i++) {
+        o = obj_new(rams[i].what, NULL, DTA_SourceType, DTST_RAM, DTA_GroupID, rams[i].gid, TAG_DONE);
+        if (o) obj_attrs(rams[i].what, o);
+        obj_dispose(rams[i].what, o);
+    }
+    o = obj_new("mem-ilbm", NULL, DTA_SourceType, DTST_MEMORY, DTA_SourceAddress, (ULONG)ilbm_bytes,
+                DTA_SourceSize, sizeof ilbm_bytes, TAG_DONE);
+    if (o) obj_attrs("mem-ilbm", o);
+    obj_dispose("mem-ilbm", o);
+    o = obj_new("mem-text", NULL, DTA_SourceType, DTST_MEMORY, DTA_SourceAddress, (ULONG)text_bytes,
+                DTA_SourceSize, sizeof text_bytes - 1, TAG_DONE);
+    if (o) obj_attrs("mem-text", o);
+    obj_dispose("mem-text", o);
+    obj_clip();
+    step("GetDTAttrs NULL");
+    out("OBJ null getattrs %lu\n", (unsigned long)GetDTAttrsA(NULL, NULL));
+    step("DisposeDTObject NULL");
+    DisposeDTObject(NULL);
+    out("OBJ null dispose ok\n");
+}
+
 /* ---- the run ------------------------------------------------------------------- */
 
-static int do_desc;
+static int do_desc, do_obj;
 static const char *scan_dir;
 
 static void run_set(void)
@@ -830,6 +1102,7 @@ static void run_set(void)
     ram_names();
     system_types();
     if (do_desc) desc_cases();
+    if (do_obj) obj_cases();
     if (scan_dir) scan(scan_dir);
     out_buf[out_len] = 0;
 }
@@ -862,6 +1135,7 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (word(argv[i], "PROBE", 0)) probe = 1;
         else if (word(argv[i], "DESC", 0)) do_desc = 1;
+        else if (word(argv[i], "OBJ", 0)) do_obj = 1;
         else if (word(argv[i], "LIST", 0)) list = 1;
         else if (word(argv[i], "LIB=", 1)) dir = argv[i] + 4;
         else if (word(argv[i], "DIR=", 1)) { strncpy(data_dir, argv[i] + 4, sizeof data_dir - 1); }
