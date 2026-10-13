@@ -408,22 +408,11 @@ def main():
         cmd("dispose")
         m.dispose()
 
-    # the completion's target disposes the object, from the process itself
-    for kind, what in (("file", "p"), ("mem", "l")):
-        cmd("new %s 50 80" % kind)
-        m.new(kind, 50, 80, False)
-        cmd("async 1")
-        m.async_on = 1
-        cmd("selfdispose")
-        m.selfdispose = 1
-        if what == "l":
-            cmd("layout 120 90 1")
-            m.layout(120, 90, 1)
-        else:
-            cmd("print")
-            m.print_()
-        cmd("runproc")
-        m.runproc()
+    # the completion's target disposes the object, from the process itself:
+    # the dispose waits for the notification to unwind (selftest)
+    for name in ("dispose", "print", "dtdispose", "relayout"):
+        cmd("selftest %s" % name)
+        m.p("selftest %s ok" % name)
 
     # LaunchToolA's command lines, AmigaDOS quoting (* before " and *)
     def tool(prog, proj, size):

@@ -495,8 +495,8 @@ struct odt_cenv {
     /* UnLock, for DTA_Handle's file lock the object takes over; optional */
     void (*unlock)(const struct odt_cenv *env, odt_u32 lock);
 
-    /* FindTask(NULL): which task runs now (a process's notification that
-     * comes back to it as OM_DISPOSE); optional */
+    /* FindTask(NULL): which task runs now (a dispose from inside a
+     * process's completion notification waits for it to unwind); optional */
     void *(*this_task)(const struct odt_cenv *env);
 };
 
@@ -548,8 +548,8 @@ struct odt_dtinst {
     void *class_library;                /* the class library NewDTObjectA opened for it */
     struct odt_SignalSemaphore proc_lock; /* held shared by the layout and print processes */
     odt_u32 lock;                       /* DTA_Handle's file lock (DTST_FILE): the object's, UnLocked with it */
-    void *proc_note[2];                 /* the layout's and the print's process, notifying at its end */
-    odt_u32 reserved[2];
+    void *notifying;                    /* the processes inside their completion notification */
+    odt_u32 reserved[3];
 };
 #define ODT_DTF_BUSY      0x0001        /* DTA_Busy */
 #define ODT_DTF_SYNC      0x0002        /* DTA_Sync: laid out and current */
@@ -572,9 +572,13 @@ odt_u32 odt_dtclass_inst_size(void);
 /* What a layout process runs (DoAsyncLayout): the object's DTM_ASYNCLAYOUT
  * under si_Lock, then the notification; and a printing process's
  * DTM_PRINT (PrintDTObjectA). Each answers the method's result. */
-odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl);
+/* the process's work; *dispose (may be NULL) is set when DisposeDTObject
+ * came from inside its completion notification (odt_dispose_later), for
+ * the caller to do now */
+odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl, int *dispose);
 void odt_proc_hold(const struct odt_cenv *env, void *obj);
-odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint *msg);
+odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint *msg, int *dispose);
+int odt_dispose_later(const struct odt_cenv *env, void *obj);
 
 /* The object half of datatypes.library's calls (the library shell adds
  * Intuition's half: GadgetInfo, AddGList, RemoveGList...) */

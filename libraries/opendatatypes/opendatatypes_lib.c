@@ -909,16 +909,22 @@ struct startup {
     struct dtPrint pr;
 };
 
+static void dispose_dt(struct ODBase *base, Object *o);
+
 static void proc_entry(void)
 {
     struct Process *me = (struct Process *)FindTask(NULL);
     struct startup *s;
+    int dispose = 0;
     WaitPort(&me->pr_MsgPort);
     s = (struct startup *)GetMsg(&me->pr_MsgPort);
     odt_proc_hold(s->env, s->obj);
     Signal(s->parent, SIGF_SINGLE);
-    if (s->printing) odt_print_run(s->env, s->obj, (struct odt_dtPrint *)&s->pr);
-    else odt_layout_run(s->env, s->obj, (struct odt_gpLayout *)&s->gpl);
+    if (s->printing) odt_print_run(s->env, s->obj, (struct odt_dtPrint *)&s->pr, &dispose);
+    else odt_layout_run(s->env, s->obj, (struct odt_gpLayout *)&s->gpl, &dispose);
+    /* DisposeDTObject from inside the completion notification: done now
+     * it has unwound (odt_dispose_later) */
+    if (dispose) dispose_dt(the_base, s->obj);
     FreeVec(s);
 }
 
@@ -1232,17 +1238,24 @@ static Object *L_NewDTObjectA(REG(d0, APTR name), REG(a0, struct TagItem *attrs)
     return o;
 }
 
-static void L_DisposeDTObject(REG(a0, Object *o), REG(a6, struct ODBase *base))
+static void dispose_dt(struct ODBase *base, Object *o)
 {
-    struct objrec *r;
-    if (!o) return;
-    r = find_obj(base, o, 1);
+    struct objrec *r = find_obj(base, o, 1);
     DisposeObject(o);
     if (r) {
         CloseLibrary(r->classlib);
         if (r->dt) L_ReleaseDataType(r->dt, base);
         FreeVec(r);
     }
+}
+
+/* From a layout or print process inside its completion notification, the
+ * object and its class library stay until the notification has unwound:
+ * the process disposes it then (proc_entry) */
+static void L_DisposeDTObject(REG(a0, Object *o), REG(a6, struct ODBase *base))
+{
+    if (!o || odt_dispose_later(&cenv, o)) return;
+    dispose_dt(base, o);
 }
 
 static ULONG L_SetDTAttrsA(REG(a0, Object *o), REG(a1, struct Window *win), REG(a2, struct Requester *req),

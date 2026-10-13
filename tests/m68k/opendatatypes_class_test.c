@@ -18,7 +18,8 @@
  *   write                        DTM_WRITE, DTWM_RAW (memory source)
  *   async 0|1                    layouts and printing on (mock) processes or not
  *   runproc                      the started processes run, in order
- *   selfdispose                  the logger disposes the object when a process says it's done
+ *   selftest NAME                a dispose from inside a process's completion notification
+ *                                (dispose, print, dtdispose, relayout), run quietly; one line
  *   print                        PrintDTObjectA
  *   dispose
  * Copyright (c) 2026 Dalsin Limited. MIT.
@@ -26,13 +27,51 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include "boopsi_core.h"
 #include "classes_core.h"
 #include "dtclass_env.h"
 
+/* memory that counts; what is freed is kept, filled with 0xDB, so a write
+ * after the free shows (quarantine_check) */
 static long live;
-static void *u_alloc(struct ou_env *e, ou_u32 n) { (void)e; live++; return calloc(1, n); }
-static void u_free(struct ou_env *e, void *m) { (void)e; if (m) { live--; free(m); } }
+static int fails;                       /* the mock's own FAILs, seen even when quiet */
+struct qblock { struct qblock *next; unsigned long n; };
+static struct qblock *quarantine;
+static void *q_alloc(unsigned long n)
+{
+    struct qblock *b = calloc(1, sizeof *b + n + 8);
+    if (!b) return NULL;
+    b->n = n;
+    live++;
+    return b + 1;
+}
+static void q_free(void *m)
+{
+    struct qblock *b;
+    if (!m) return;
+    b = (struct qblock *)m - 1;
+    memset(m, 0xDB, b->n);
+    b->next = quarantine;
+    quarantine = b;
+    live--;
+}
+static void quarantine_check(void)
+{
+    struct qblock *b;
+    unsigned long i;
+    for (b = quarantine; b; b = b->next)
+        for (i = 0; i < b->n; i++)
+            if (((unsigned char *)(b + 1))[i] != 0xDB) {
+                printf("FAIL a write after free (%lu bytes in)\n", i);
+                fails++;
+                memset(b + 1, 0xDB, b->n);
+                break;
+            }
+}
+static void *u_alloc(struct ou_env *e, ou_u32 n) { (void)e; return q_alloc(n); }
+static void u_free(struct ou_env *e, void *m) { (void)e; q_free(m); }
 static void u_lock(struct ou_env *e, void *l) { (void)e; (void)l; }
 static void u_initlock(struct ou_env *e, void *l) { (void)e; memset(l, 0, OU_LOCKSPACE); }
 static void u_reply(struct ou_env *e, void *m, void *name) { (void)e; (void)m; (void)name; }
@@ -90,11 +129,12 @@ static void put_tag(odt_u32 tag, odt_u32 v)
 
 /* ---- the logger: ICA_TARGET of every object -------------------------------- */
 
-/* selfdispose: the logger disposes the object when a process tells it
- * it's done (DTA_Sync or DTA_PrinterStatus), from that process */
-static int selfdispose, self_gone, cur = -1, sem_depth;
-static long base;
-static void *the_obj;
+/* What the logger does when a process tells it it's done (DTA_Sync or
+ * DTA_PrinterStatus), from that process (selftest) */
+enum { DONE_NOTHING, DONE_DISPOSE, DONE_DTDISPOSE, DONE_RELAYOUT };
+static int on_done, in_notify, cur = -1, sem_depth;
+static void *done_obj;
+static void done_action(void);
 static odt_u32 logger_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *obj, void *msg)
 {
     odt_u32 id = *(odt_u32 *)msg;
@@ -108,14 +148,9 @@ static odt_u32 logger_dispatch(const struct odt_cenv *env, struct odt_IClass *cl
             if (t->ti_Tag == ODT_DTA_Sync || t->ti_Tag == ODT_DTA_PrinterStatus) done = 1;
         }
         printf("\n");
-        if (selfdispose && done && cur >= 0 && the_obj) {
-            void *o = the_obj;
-            selfdispose = 0;
-            the_obj = NULL;
-            self_gone = 1;
-            oi_DisposeObject(&oenv, o);
-            printf("selfdispose %d\n", sem_depth);
-        }
+        in_notify++;
+        if (on_done && done && cur >= 0 && done_obj) done_action();
+        in_notify--;
         return 0;
     }
     return env->do_super(env, cl, obj, msg);
@@ -193,8 +228,8 @@ static odt_u32 e_coerce(const struct odt_cenv *e, struct odt_IClass *cl, void *o
 static void *e_new_object(const struct odt_cenv *e, struct odt_IClass *cl, const char *id, struct odt_TagItem *tags)
 { (void)e; return oi_NewObjectA(&oenv, &boopsi, (struct oi_IClass *)cl, id, (struct ou_TagItem *)tags); }
 static void e_dispose(const struct odt_cenv *e, void *obj) { (void)e; oi_DisposeObject(&oenv, obj); }
-static void *e_alloc(const struct odt_cenv *e, odt_u32 n) { (void)e; live++; return calloc(1, n); }
-static void e_free(const struct odt_cenv *e, void *p) { (void)e; if (p) { live--; free(p); } }
+static void *e_alloc(const struct odt_cenv *e, odt_u32 n) { (void)e; return q_alloc(n); }
+static void e_free(const struct odt_cenv *e, void *p) { (void)e; q_free(p); }
 
 /* semaphores: a count each, which must balance, and each holder's count
  * (opaque[2 + h]: h 0 the program, 1 + n started process n), opaque[1]
@@ -208,11 +243,11 @@ static void sem_take(struct odt_SignalSemaphore *s, int shared)
     int h, me = cur + 1;
     /* exclusive is nested only over one's own exclusive hold */
     if (!shared && s->opaque[2 + me] && s->opaque[1] != me + 1)
-        printf("FAIL exclusive over its own shared hold: a deadlock\n");
+        { printf("FAIL exclusive over its own shared hold: a deadlock\n"); fails++; }
     for (h = 0; h < SEM_HOLDERS; h++)
         if (h != me && s->opaque[2 + h] && (!shared || s->opaque[1])) {
             if (h) run_one(h - 1);
-            if (s->opaque[2 + h]) printf("FAIL a semaphore another holds\n");
+            if (s->opaque[2 + h]) { printf("FAIL a semaphore another holds\n"); fails++; }
         }
     s->opaque[0]++;
     s->opaque[2 + cur + 1]++;
@@ -225,7 +260,7 @@ static void e_sem_shared(const struct odt_cenv *e, struct odt_SignalSemaphore *s
 static void e_sem_release(const struct odt_cenv *e, struct odt_SignalSemaphore *s)
 {
     (void)e;
-    if (!s->opaque[0] || !s->opaque[2 + cur + 1]) printf("FAIL release of a semaphore not held\n");
+    if (!s->opaque[0] || !s->opaque[2 + cur + 1]) { printf("FAIL release of a semaphore not held\n"); fails++; }
     s->opaque[2 + cur + 1]--;
     if (!--s->opaque[0]) s->opaque[1] = 0;
     sem_depth--;
@@ -299,14 +334,16 @@ static void e_signal_stop(const struct odt_cenv *e, void *proc)
 static int e_check_stop(const struct odt_cenv *e) { (void)e; return cur >= 0 ? pend[cur].stopped : 0; }
 static char tasks[17];                  /* the program, then each process */
 static void *e_this_task(const struct odt_cenv *e) { (void)e; return &tasks[cur + 1]; }
+static void dt_dispose(void *o);
 static void run_one(int i)
 {
-    int was = cur;
+    int was = cur, dispose = 0;
     if (i < 0 || i >= npend || !pend[i].live) return;
     cur = i;
-    if (pend[i].printing) odt_print_run(&cenv, pend[i].obj, &pend[i].pr);
-    else odt_layout_run(&cenv, pend[i].obj, &pend[i].gpl);
+    if (pend[i].printing) odt_print_run(&cenv, pend[i].obj, &pend[i].pr, &dispose);
+    else odt_layout_run(&cenv, pend[i].obj, &pend[i].gpl, &dispose);
     pend[i].live = 0;
+    if (dispose) dt_dispose(pend[i].obj);   /* the library's process, as proc_entry */
     cur = was;
 }
 static void run_procs(void)
@@ -359,6 +396,7 @@ static unsigned char memdata[300];
 static struct odt_GadgetInfo gi;
 static void *obj, *logger;
 static int active;
+static long base;
 
 static void input(odt_u32 method, odt_u16 code, int x, int y)
 {
@@ -393,6 +431,88 @@ static void set_tops(odt_u32 method, long tv, long th)
     struct odt_TagItem t[3] = { { ODT_DTA_TopVert, (odt_u32)tv }, { ODT_DTA_TopHoriz, (odt_u32)th }, { 0, 0 } };
     struct odt_opUpdate m = { method, t, &gi, 0 };
     oi_DoMethodA(&oenv, obj, &m);
+}
+
+/* ---- a dispose from inside a completion notification ----------------------- */
+
+/* DisposeDTObject as the library has it: from a process inside its
+ * completion notification it waits (odt_dispose_later), and the process
+ * does it once the notification has unwound (run_one); the class library
+ * is closed only then */
+static int classlibs;
+static void dt_dispose(void *o)
+{
+    if (odt_dispose_later(&cenv, o)) return;
+    oi_DisposeObject(&oenv, o);
+    if (in_notify) { printf("FAIL the class library closed inside the notification\n"); fails++; }
+    classlibs--;
+}
+
+static void done_action(void)
+{
+    void *o = done_obj;
+    int what = on_done;
+    on_done = DONE_NOTHING;
+    if (what == DONE_RELAYOUT) {
+        /* another layout from the completion, which runs and ends while
+         * this one is still in it; then the dispose */
+        struct odt_gpLayout l = { ODT_GM_LAYOUT, &gi, 0 };
+        int n = npend;
+        odt_do_async_layout(&cenv, o, &l);
+        run_one(n);
+        what = DONE_DISPOSE;
+    }
+    done_obj = NULL;
+    if (what == DONE_DISPOSE) oi_DisposeObject(&oenv, o);
+    else if (what == DONE_DTDISPOSE) dt_dispose(o);
+}
+
+/* selftest dispose|print|dtdispose|relayout: an object on a memory source
+ * whose layout (print) process's completion target disposes it; quiet,
+ * then one line: ok when nothing failed, the object and everything it had
+ * are gone, no lock is held and no freed memory was written */
+static void selftest(const char *name)
+{
+    long before = live;
+    int f0 = fails, d0 = sem_depth, was_async = async_on, saved, devnull;
+    struct odt_TagItem t[] = {
+        { ODT_DTA_SourceType, ODT_DTST_MEMORY }, { ODT_DTA_DataType, (odt_u32)&dt_bin },
+        { ODT_DTA_SourceAddress, (odt_u32)memdata }, { ODT_DTA_SourceSize, sizeof memdata },
+        { ODT_ICA_TARGET, (odt_u32)logger }, { PROBE_TotV, 50 }, { PROBE_TotH, 80 }, { ODT_TAG_DONE, 0 } };
+    void *o;
+    fflush(stdout);
+    saved = dup(1);
+    devnull = open("/dev/null", O_WRONLY);
+    dup2(devnull, 1);
+    close(devnull);
+    async_on = 1;
+    o = oi_NewObjectA(&oenv, &boopsi, NULL, "probe.datatype", (struct ou_TagItem *)t);
+    if (o) {
+        classlibs = 1;
+        done_obj = o;
+        on_done = !strcmp(name, "dtdispose") ? DONE_DTDISPOSE : !strcmp(name, "relayout") ? DONE_RELAYOUT : DONE_DISPOSE;
+        if (!strcmp(name, "print")) {
+            struct odt_dtPrint m = { ODT_DTM_PRINT, NULL, NULL, NULL };
+            odt_print_object(&cenv, o, NULL, NULL, &m);
+        } else {
+            struct odt_gpLayout l = { ODT_GM_LAYOUT, &gi, 1 };
+            odt_do_async_layout(&cenv, o, &l);
+        }
+        run_procs();
+        if (strcmp(name, "dtdispose")) classlibs = 0;
+    }
+    quarantine_check();
+    fflush(stdout);
+    dup2(saved, 1);
+    close(saved);
+    async_on = was_async;
+    if (o && fails == f0 && live == before && sem_depth == d0 && !classlibs && !done_obj)
+        printf("selftest %s ok\n", name);
+    else
+        printf("selftest %s: %d failed, %ld left, %d held, %d class libraries, %s\n", name, fails - f0, live - before,
+               sem_depth - d0, classlibs, done_obj ? "not disposed" : "disposed");
+    on_done = DONE_NOTHING;
+    done_obj = NULL;
 }
 
 int main(int argc, char **argv)
@@ -479,6 +599,8 @@ int main(int argc, char **argv)
         } else if (!strcmp(w[0], "string")) {
             const char *t = odt_GetDTString((odt_u32)strtoul(w[1], NULL, 0));
             printf("string %s [%s]\n", w[1], t ? t : "(null)");
+        } else if (!strcmp(w[0], "selftest")) {
+            selftest(w[1]);
         } else if (!obj) {
             continue;
         } else if (!strcmp(w[0], "units")) {
@@ -526,15 +648,7 @@ int main(int argc, char **argv)
             async_on = atoi(w[1]);
         } else if (!strcmp(w[0], "runproc")) {
             run_procs();
-            if (self_gone) {
-                obj = NULL;
-                active = 0;
-                self_gone = 0;
-                printf("dispose %ld %d\n", live - base, sem_depth);
-            }
-        } else if (!strcmp(w[0], "selfdispose")) {
-            selfdispose = 1;
-            the_obj = obj;
+
         } else if (!strcmp(w[0], "print")) {
             struct odt_dtPrint m = { ODT_DTM_PRINT, NULL, NULL, NULL };
             printf("print %lu\n", (unsigned long)odt_print_object(&cenv, obj, NULL, NULL, &m));
@@ -543,7 +657,7 @@ int main(int argc, char **argv)
                 int i;
                 oi_DisposeObject(&oenv, obj);
                 for (i = 0; i < npend; i++)
-                    if (pend[i].live && pend[i].obj == obj) printf("FAIL process %d outlives its object\n", i);
+                    if (pend[i].live && pend[i].obj == obj) { printf("FAIL process %d outlives its object\n", i); fails++; }
             }
             obj = NULL;
             active = 0;
@@ -554,5 +668,6 @@ int main(int argc, char **argv)
         }
     }
     if (obj) { oi_DisposeObject(&oenv, obj); printf("dispose %ld %d\n", live - base, sem_depth); }
+    quarantine_check();
     return 0;
 }
