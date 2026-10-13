@@ -2,7 +2,20 @@
 """Compare an open library's .lvo table with the NDK's _lib.fd: same call at every LVO,
 same registers. Private slots in the fd may be private or named here only
 if the fd has them private. Exit 1 on any difference, listing each."""
-import re, sys
+import os, re, sys
+
+def ndk32_fd(path):
+    """The stoves keep NDK 1.3's fds in lib/fd13 beside NDK 3.2's in lib/fd, and
+    the build scripts' `find ... | head -1` can land on either. An OS 3.2
+    library is checked against 3.2's table: given an fd13 file, use the fd
+    file of the same name next to it when there is one."""
+    d, name = os.path.split(os.path.abspath(path))
+    if os.path.basename(d) == "fd13":
+        alt = os.path.join(os.path.dirname(d), "fd", name)
+        if os.path.isfile(alt):
+            print("%s is NDK 1.3's: checking against NDK 3.2's %s" % (path, alt))
+            return alt
+    return path
 
 def read_fd(path):
     bias, public, out = 30, True, {}
@@ -28,6 +41,7 @@ def read_lvo(path):
         out[int(line[0])] = (line[1], line[2] if len(line) > 2 else "")
     return out
 
+sys.argv[1] = ndk32_fd(sys.argv[1])
 fd, ours = read_fd(sys.argv[1]), read_lvo(sys.argv[2])
 bad = 0
 for lvo in sorted(set(fd) | set(ours), reverse=True):
