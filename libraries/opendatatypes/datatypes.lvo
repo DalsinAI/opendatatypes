@@ -1,0 +1,52 @@
+# datatypes.library's jump table, as OpenDatatypes builds it: LVO, call,
+# registers. build-amiga.sh (with ../common/check_fd.py) checks this against
+# the NDK 3.2 datatypes_lib.fd in the stove and stops on any difference;
+# opendatatypes_lib.c's lib_vectors[] follows it line for line.
+# NDK 3.2 keeps -120..-132 private and nothing public from -144 to -252
+# (the V45 calls start at -258); those slots answer 0 here.
+-30 private
+-36 ObtainDataTypeA d0,a0,a1
+-42 ReleaseDataType a0
+-48 NewDTObjectA d0,a0
+-54 DisposeDTObject a0
+-60 SetDTAttrsA a0,a1,a2,a3
+-66 GetDTAttrsA a0,a2
+-72 AddDTObject a0,a1,a2,d0
+-78 RefreshDTObjectA a0,a1,a2,a3
+-84 DoAsyncLayout a0,a1
+-90 DoDTMethodA a0,a1,a2,a3
+-96 RemoveDTObject a0,a1
+-102 GetDTMethods a0
+-108 GetDTTriggerMethods a0
+-114 PrintDTObjectA a0,a1,a2,a3
+-120 private
+-126 private
+-132 private
+-138 GetDTString d0
+-144 private
+-150 private
+-156 private
+-162 private
+-168 private
+-174 private
+-180 private
+-186 private
+-192 private
+-198 private
+-204 private
+-210 private
+-216 private
+-222 private
+-228 private
+-234 private
+-240 private
+-246 private
+-252 private
+-258 FindMethod a0,a1
+-264 FindTriggerMethod a0,a1,d0
+-270 CopyDTMethods a0,a1,a2
+-276 CopyDTTriggerMethods a0,a1,a2
+-282 FreeDTMethods a0
+-288 GetDTTriggerMethodDataFlags d0
+-294 SaveDTObjectA a0,a1,a2,a3,d0,d1,a4
+-300 StartDragSelect a0
