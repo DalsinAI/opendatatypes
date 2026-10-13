@@ -1253,11 +1253,15 @@ static void dispose_dt(struct ODBase *base, Object *o, int object)
 
 /* From a layout or print process inside its completion notification, the
  * object and its class library stay until the notification has unwound:
- * the process disposes it then (proc_entry) */
+ * the process disposes it then (proc_entry). The object has one disposer:
+ * a second DisposeDTObject joins the first (odt_dispose_later). */
 static void L_DisposeDTObject(REG(a0, Object *o), REG(a6, struct ODBase *base))
 {
-    if (!o || (ours(base, o) && odt_dispose_later(&cenv, o))) return;
-    dispose_dt(base, o, 1);
+    int later;
+    if (!o) return;
+    later = ours(base, o) ? odt_dispose_later(&cenv, o) : 0;
+    if (!later) dispose_dt(base, o, 1);
+    else if (later == ODT_DISPOSE_RECORD) dispose_dt(base, o, 0);
 }
 
 static ULONG L_SetDTAttrsA(REG(a0, Object *o), REG(a1, struct Window *win), REG(a2, struct Requester *req),

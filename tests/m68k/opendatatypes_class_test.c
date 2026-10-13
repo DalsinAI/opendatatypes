@@ -37,7 +37,7 @@
  * after the free shows (quarantine_check) */
 static long live;
 static int fails;                       /* the mock's own FAILs, seen even when quiet */
-struct qblock { struct qblock *next; unsigned long n; };
+struct qblock { struct qblock *next; unsigned long n, freed; };
 static struct qblock *quarantine;
 static void *q_alloc(unsigned long n)
 {
@@ -52,6 +52,12 @@ static void q_free(void *m)
     struct qblock *b;
     if (!m) return;
     b = (struct qblock *)m - 1;
+    if (b->freed) {
+        printf("FAIL freed twice\n");
+        fails++;
+        return;
+    }
+    b->freed = 1;
     memset(m, 0xDB, b->n);
     b->next = quarantine;
     quarantine = b;
@@ -131,7 +137,8 @@ static void put_tag(odt_u32 tag, odt_u32 v)
 
 /* What the logger does when a process tells it it's done (DTA_Sync or
  * DTA_PrinterStatus), from that process (selftest) */
-enum { DONE_NOTHING, DONE_DISPOSE, DONE_DTDISPOSE, DONE_RELAYOUT, DONE_OVERLAP, DONE_DTOVERLAP, DONE_MIXOVERLAP, DONE_DTJOIN };
+enum { DONE_NOTHING, DONE_DISPOSE, DONE_DTDISPOSE, DONE_RELAYOUT, DONE_OVERLAP, DONE_DTOVERLAP, DONE_MIXOVERLAP, DONE_DTJOIN, DONE_DTFIRST };
+static void *owner_obj;               /* dtfirst: the program's dispose, waiting on the process */
 static int on_done, in_notify, cur = -1, sem_depth;
 static void *done_obj;
 static void done_action(void);
@@ -445,8 +452,9 @@ static void set_tops(odt_u32 method, long tv, long th)
  * is closed only then */
 static void dt_dispose(void *o)
 {
-    if (odt_dispose_later(&cenv, o)) return;
-    dt_dispose_now(o);
+    int later = odt_dispose_later(&cenv, o);
+    if (!later) dt_dispose_now(o);
+    else if (later == ODT_DISPOSE_RECORD) classlibs--;
 }
 static void dt_dispose_now(void *o)
 {
@@ -477,6 +485,17 @@ static void done_action(void)
         cur = -1;
         dt_dispose(o);
         cur = was;
+        what = DONE_NOTHING;
+    } else if (what == DONE_DTFIRST) {
+        /* the program's DisposeDTObject, on another task, first: it owns
+         * the dispose and waits for this process (proc_lock), so the
+         * completion's own DisposeDTObject joins it; the program's goes on
+         * once the process has ended (selftest) */
+        int was = cur;
+        cur = -1;
+        if (odt_dispose_later(&cenv, o) == 0) owner_obj = o;
+        cur = was;
+        dt_dispose(o);
         what = DONE_NOTHING;
     } else if (what >= DONE_OVERLAP) {
         /* a print from the completion, whose own completion disposes the
@@ -526,7 +545,8 @@ static void selftest(const char *name)
         done_obj = o;
         on_done = !strcmp(name, "dtdispose") ? DONE_DTDISPOSE : !strcmp(name, "relayout") ? DONE_RELAYOUT :
                   !strcmp(name, "overlap") ? DONE_OVERLAP : !strcmp(name, "dtoverlap") ? DONE_DTOVERLAP :
-                  !strcmp(name, "mixoverlap") ? DONE_MIXOVERLAP : !strcmp(name, "dtjoin") ? DONE_DTJOIN : DONE_DISPOSE;
+                  !strcmp(name, "mixoverlap") ? DONE_MIXOVERLAP : !strcmp(name, "dtjoin") ? DONE_DTJOIN :
+                  !strcmp(name, "dtfirst") ? DONE_DTFIRST : DONE_DISPOSE;
         if (!strcmp(name, "print")) {
             struct odt_dtPrint m = { ODT_DTM_PRINT, NULL, NULL, NULL };
             odt_print_object(&cenv, o, NULL, NULL, &m);
@@ -535,8 +555,10 @@ static void selftest(const char *name)
             odt_do_async_layout(&cenv, o, &l);
         }
         run_procs();
+        if (owner_obj) dt_dispose_now(owner_obj);
+        owner_obj = NULL;
         if (strcmp(name, "dtdispose") && strcmp(name, "dtoverlap") && strcmp(name, "mixoverlap") &&
-            strcmp(name, "dtjoin")) classlibs = 0;
+            strcmp(name, "dtjoin") && strcmp(name, "dtfirst")) classlibs = 0;
     }
     quarantine_check();
     fflush(stdout);

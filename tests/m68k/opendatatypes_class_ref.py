@@ -412,9 +412,10 @@ def main():
     # the dispose waits for the notification to unwind (selftest); and with
     # a print from the completion whose own completion disposes it too, the
     # object goes once, after the last process has unwound (*overlap); a
-    # DisposeDTObject from another task meanwhile joins it (dtjoin)
+    # DisposeDTObject from another task meanwhile joins it (dtjoin), and one
+    # from another task first is joined by the completion's (dtfirst)
     for name in ("dispose", "print", "dtdispose", "relayout", "overlap", "dtoverlap", "mixoverlap",
-                 "dtjoin"):
+                 "dtjoin", "dtfirst"):
         cmd("selftest %s" % name)
         m.p("selftest %s ok" % name)
 

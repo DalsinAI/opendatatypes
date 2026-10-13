@@ -585,6 +585,8 @@ odt_u32 odt_dtclass_inst_size(void);
 odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl, int *dispose);
 void odt_proc_hold(const struct odt_cenv *env, void *obj);
 odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint *msg, int *dispose);
+/* DisposeDTObject's first step (dtclass_core.c): 0, the caller disposes
+ * it all now; ODT_DISPOSE_RECORD, only the library's record; 1, nothing */
 int odt_dispose_later(const struct odt_cenv *env, void *obj);
 
 /* The object half of datatypes.library's calls (the library shell adds

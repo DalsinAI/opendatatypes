@@ -136,6 +136,7 @@ static void notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo 
 #define PN_DISPOSE   1                  /* OM_DISPOSE came: the subclasses have had theirs */
 #define PN_DTDISPOSE 2                  /* DisposeDTObject came: the library's record goes too */
 #define PN_TAKEN     4                  /* the last process is disposing it */
+#define PN_OWNED     8                  /* a DisposeDTObject from outside the notifications is disposing it */
 struct proc_note {
     struct proc_note *next;
     void *task;
@@ -926,7 +927,7 @@ static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
     }
     last = d->procs <= 1;
     if (d->procs) d->procs--;
-    what = last ? d->dispose_pending : 0;
+    what = last && !(d->dispose_pending & PN_OWNED) ? d->dispose_pending : 0;
     cl = d->dispose_cl;
     /* a DisposeDTObject from elsewhere from now on joins this one */
     if (what) d->dispose_pending = PN_TAKEN;
@@ -955,24 +956,38 @@ odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayou
     return r;
 }
 
-/* DisposeDTObject on a process inside its completion notification: the
- * dispose waits for the object's last process to end, and that process's
- * caller (odt_layout_run's or odt_print_run's *dispose) does it then. One
- * from any task while such a dispose is waiting or under way joins it:
- * the object has one disposer. 1 when so. */
+/* DisposeDTObject's first step: the object has one disposer.
+ * - From a process inside its completion notification, or while such a
+ *   dispose waits, the dispose waits for the object's last process to end,
+ *   and that process's caller (odt_layout_run's or odt_print_run's
+ *   *dispose) does it then: 1.
+ * - While one is under way (the last process's, or another task's
+ *   DisposeDTObject): joined, 1; but when the one under way is OM_DISPOSE
+ *   only, the library's record is the caller's to free: ODT_DISPOSE_RECORD.
+ * - Otherwise the caller disposes it all now, and is its disposer (a
+ *   notification's DisposeDTObject meanwhile joins it): 0. */
 int odt_dispose_later(const struct odt_cenv *env, void *obj)
 {
     struct odt_dtinst *d;
     struct proc_note *pn;
-    int later;
+    int r;
     if (!obj) return 0;
     d = ODT_DTINST(env, obj);
     pn = own_note(env, d);
     env->sem_obtain(env, &d->si.si_Lock);
-    later = pn || d->dispose_pending;
-    if (later && !(d->dispose_pending & PN_TAKEN)) d->dispose_pending |= PN_DTDISPOSE;
+    if (d->dispose_pending & (PN_OWNED | PN_TAKEN)) {
+        r = 1;
+        if (!(d->dispose_pending & (PN_OWNED | PN_DTDISPOSE))) r = ODT_DISPOSE_RECORD;
+        d->dispose_pending |= PN_DTDISPOSE;
+    } else if (pn || d->dispose_pending) {
+        d->dispose_pending |= PN_DTDISPOSE;
+        r = 1;
+    } else {
+        d->dispose_pending = PN_OWNED;
+        r = 0;
+    }
     env->sem_release(env, &d->si.si_Lock);
-    return later;
+    return r;
 }
 
 /* DoAsyncLayout: one layout at a time; a new one stops the old first */
