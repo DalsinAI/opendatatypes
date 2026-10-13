@@ -552,7 +552,7 @@ struct odt_dtinst {
     odt_u16 procs;                      /* layout and print processes started and not yet ended */
     odt_u16 dispose_pending;            /* a dispose from inside a completion notification (dtclass_core.c) */
     struct odt_IClass *dispose_cl;      /* its OM_DISPOSE's class */
-    odt_u32 reserved[1];
+    void *dispose_owner;                /* the task disposing it, once one is */
 };
 #define ODT_DTF_BUSY      0x0001        /* DTA_Busy */
 #define ODT_DTF_SYNC      0x0002        /* DTA_Sync: laid out and current */

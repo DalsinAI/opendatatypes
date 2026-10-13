@@ -135,8 +135,11 @@ static void notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo 
  * object under si_Lock, so a dispose can tell it comes from inside. */
 #define PN_DISPOSE   1                  /* OM_DISPOSE came: the subclasses have had theirs */
 #define PN_DTDISPOSE 2                  /* DisposeDTObject came: the library's record goes too */
-#define PN_TAKEN     4                  /* the last process is disposing it */
+#define PN_TAKEN     4                  /* the last process is disposing it (with the bits it took) */
 #define PN_OWNED     8                  /* a dispose from outside the notifications is disposing it */
+#define PN_OWNED_DT  16                 /* ... and it is DisposeDTObject, which frees the record */
+#define PN_RECORD    32                 /* the record's free has been handed to a caller */
+#define PN_BUSY      (PN_OWNED | PN_TAKEN)
 struct proc_note {
     struct proc_note *next;
     void *task;
@@ -159,6 +162,11 @@ static void proc_notify(const struct odt_cenv *env, void *obj, struct odt_Gadget
             break;
         }
     env->sem_release(env, &d->si.si_Lock);
+}
+
+static void *this_task(const struct odt_cenv *env)
+{
+    return env->this_task ? env->this_task(env) : NULLP;
 }
 
 /* The running task's record, when it is inside its completion
@@ -512,6 +520,7 @@ static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj
     d->procs = 0;
     d->dispose_pending = 0;
     d->dispose_cl = NULLP;
+    d->dispose_owner = NULLP;
     d->si.si_VertUnit = d->si.si_HorizUnit = 1;
     d->source_type = ODT_DTST_FILE;
     g->SpecialInfo = &d->si;
@@ -554,9 +563,18 @@ static odt_u32 om_dispose(const struct odt_cenv *env, struct odt_IClass *cl, voi
         env->sem_release(env, &d->si.si_Lock);
         return 0;
     }
+    /* another task is disposing it: joined (a second DisposeObject is the
+     * program's double free; the subclasses have had theirs again) */
+    if ((d->dispose_pending & PN_BUSY) && d->dispose_owner != this_task(env)) {
+        env->sem_release(env, &d->si.si_Lock);
+        return 0;
+    }
     /* from outside: this is the object's disposer, before it waits for
      * the processes, so a notification's DisposeDTObject joins it */
-    d->dispose_pending |= PN_OWNED;
+    if (!(d->dispose_pending & PN_BUSY)) {
+        d->dispose_pending |= PN_OWNED;
+        d->dispose_owner = this_task(env);
+    }
     env->sem_release(env, &d->si.si_Lock);
     end_procs(env, d);
     close_source(env, d);
@@ -915,25 +933,37 @@ static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpL
  * process's, is done by the object's last process, once: OM_DISPOSE from
  * datatypesclass up (the subclasses having had theirs), and the library's
  * record left to the caller (DisposeDTObject: *dispose). An earlier
- * process asks the others to stop and leaves it. */
+ * process asks the others to stop and leaves it. When a task outside owns
+ * the dispose with OM_DISPOSE alone, a notification's DisposeDTObject
+ * leaves the last process the record. */
 static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
 {
     struct odt_dtinst *d = ODT_DTINST(env, obj);
     struct odt_IClass *cl;
     odt_u32 m = ODT_OM_DISPOSE;
-    int what, last;
+    int what = 0, last, record = 0;
+    odt_u16 p;
     env->sem_obtain(env, &d->si.si_Lock);
+    p = d->dispose_pending;
     /* an owner from outside has asked them already (end_procs) */
-    if (d->dispose_pending && !(d->dispose_pending & PN_OWNED) && d->procs > 1) {
+    if (p && !(p & PN_OWNED) && d->procs > 1) {
         if (d->layout_proc && env->signal_stop) env->signal_stop(env, d->layout_proc);
         stop_print(env, d);
     }
     last = d->procs <= 1;
     if (d->procs) d->procs--;
-    what = last && !(d->dispose_pending & PN_OWNED) ? d->dispose_pending : 0;
+    if (last && (p & PN_OWNED)) {
+        if ((p & PN_DTDISPOSE) && !(p & (PN_OWNED_DT | PN_RECORD))) {
+            d->dispose_pending |= PN_RECORD;
+            record = 1;
+        }
+    } else if (last && p) {
+        /* a dispose from elsewhere from now on joins this one */
+        what = p;
+        d->dispose_pending |= PN_TAKEN;
+        d->dispose_owner = this_task(env);
+    }
     cl = d->dispose_cl;
-    /* a DisposeDTObject from elsewhere from now on joins this one */
-    if (what) d->dispose_pending = PN_TAKEN;
     env->sem_release(env, &d->si.si_Lock);
     /* not the last: the object may go as soon as proc_lock does */
     env->sem_release(env, &d->proc_lock);
@@ -943,8 +973,9 @@ static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
         free_strings(env, d);
         env->do_super(env, cl, obj, &m);
     }
-    if (dispose && (what & PN_DTDISPOSE))
-        *dispose = what & PN_DISPOSE ? ODT_DISPOSE_RECORD : ODT_DISPOSE_ALL;
+    if (!dispose) return;
+    if (record) *dispose = ODT_DISPOSE_RECORD;
+    else if (what & PN_DTDISPOSE) *dispose = what & PN_DISPOSE ? ODT_DISPOSE_RECORD : ODT_DISPOSE_ALL;
 }
 
 /* The layout process's work, proc_lock held (odt_proc_hold) until after
@@ -959,34 +990,41 @@ odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayou
     return r;
 }
 
-/* DisposeDTObject's first step: the object has one disposer.
+/* DisposeDTObject's first step: the object has one disposer, and its
+ * library record one freer.
  * - From a process inside its completion notification, or while such a
  *   dispose waits, the dispose waits for the object's last process to end,
  *   and that process's caller (odt_layout_run's or odt_print_run's
  *   *dispose) does it then: 1.
- * - While one is under way (the last process's, or another task's
- *   DisposeDTObject): joined, 1; but when the one under way is OM_DISPOSE
- *   only, the library's record is the caller's to free: ODT_DISPOSE_RECORD.
- * - Otherwise the caller disposes it all now, and is its disposer (a
- *   notification's DisposeDTObject meanwhile joins it): 0. */
+ * - While one is under way (the last process's, or another task's): joined,
+ *   1; but when the one under way is OM_DISPOSE alone, the record is the
+ *   caller's to free: ODT_DISPOSE_RECORD (from inside a notification, the
+ *   last process's, through *dispose).
+ * - Otherwise the caller disposes it all now, and is its disposer: 0. */
 int odt_dispose_later(const struct odt_cenv *env, void *obj)
 {
     struct odt_dtinst *d;
     struct proc_note *pn;
-    int r;
+    odt_u16 p;
+    int r = 1;
     if (!obj) return 0;
     d = ODT_DTINST(env, obj);
     env->sem_obtain(env, &d->si.si_Lock);
     pn = own_note_locked(env, d);
-    if (d->dispose_pending & (PN_OWNED | PN_TAKEN)) {
-        r = 1;
-        if (!(d->dispose_pending & (PN_OWNED | PN_DTDISPOSE))) r = ODT_DISPOSE_RECORD;
+    p = d->dispose_pending;
+    if (p & PN_BUSY) {
+        if (!(p & (PN_OWNED_DT | PN_DTDISPOSE | PN_RECORD))) {
+            d->dispose_pending |= PN_DTDISPOSE;
+            if (!pn) {
+                d->dispose_pending |= PN_RECORD;
+                r = ODT_DISPOSE_RECORD;
+            }
+        }
+    } else if (pn || p) {
         d->dispose_pending |= PN_DTDISPOSE;
-    } else if (pn || d->dispose_pending) {
-        d->dispose_pending |= PN_DTDISPOSE;
-        r = 1;
     } else {
-        d->dispose_pending = PN_OWNED;
+        d->dispose_pending = PN_OWNED | PN_OWNED_DT;
+        d->dispose_owner = this_task(env);
         r = 0;
     }
     env->sem_release(env, &d->si.si_Lock);
