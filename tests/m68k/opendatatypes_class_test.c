@@ -18,6 +18,7 @@
  *   write                        DTM_WRITE, DTWM_RAW (memory source)
  *   async 0|1                    layouts and printing on (mock) processes or not
  *   runproc                      the started processes run, in order
+ *   selfdispose                  the logger disposes the object when a process says it's done
  *   print                        PrintDTObjectA
  *   dispose
  * Copyright (c) 2026 Dalsin Limited. MIT.
@@ -89,15 +90,32 @@ static void put_tag(odt_u32 tag, odt_u32 v)
 
 /* ---- the logger: ICA_TARGET of every object -------------------------------- */
 
+/* selfdispose: the logger disposes the object when a process tells it
+ * it's done (DTA_Sync or DTA_PrinterStatus), from that process */
+static int selfdispose, self_gone, cur = -1, sem_depth;
+static long base;
+static void *the_obj;
 static odt_u32 logger_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *obj, void *msg)
 {
     odt_u32 id = *(odt_u32 *)msg;
     if (id == ODT_OM_UPDATE) {
         struct odt_opUpdate *u = msg;
         const struct odt_TagItem *tp = u->opu_AttrList, *t;
+        int done = 0;
         printf("notify%s", (u->opu_Flags & ODT_OPUF_INTERIM) ? " interim" : "");
-        while ((t = odt_next_tag(&tp)) != NULL) put_tag(t->ti_Tag, t->ti_Data);
+        while ((t = odt_next_tag(&tp)) != NULL) {
+            put_tag(t->ti_Tag, t->ti_Data);
+            if (t->ti_Tag == ODT_DTA_Sync || t->ti_Tag == ODT_DTA_PrinterStatus) done = 1;
+        }
         printf("\n");
+        if (selfdispose && done && cur >= 0 && the_obj) {
+            void *o = the_obj;
+            selfdispose = 0;
+            the_obj = NULL;
+            self_gone = 1;
+            oi_DisposeObject(&oenv, o);
+            printf("selfdispose %d\n", sem_depth);
+        }
         return 0;
     }
     return env->do_super(env, cl, obj, msg);
@@ -183,21 +201,22 @@ static void e_free(const struct odt_cenv *e, void *p) { (void)e; if (p) { live--
  * set while one holds it exclusively. One another holds (exclusively, for
  * a shared request) is waited for: the process holding it runs to its end
  * first */
-static int sem_depth;
-static int cur = -1;
 static void run_one(int i);
 #define SEM_HOLDERS 17
 static void sem_take(struct odt_SignalSemaphore *s, int shared)
 {
-    int h;
+    int h, me = cur + 1;
+    /* exclusive is nested only over one's own exclusive hold */
+    if (!shared && s->opaque[2 + me] && s->opaque[1] != me + 1)
+        printf("FAIL exclusive over its own shared hold: a deadlock\n");
     for (h = 0; h < SEM_HOLDERS; h++)
-        if (h != cur + 1 && s->opaque[2 + h] && (!shared || s->opaque[1])) {
+        if (h != me && s->opaque[2 + h] && (!shared || s->opaque[1])) {
             if (h) run_one(h - 1);
             if (s->opaque[2 + h]) printf("FAIL a semaphore another holds\n");
         }
     s->opaque[0]++;
     s->opaque[2 + cur + 1]++;
-    if (!shared) s->opaque[1] = 1;
+    if (!shared && !s->opaque[1]) s->opaque[1] = (odt_u8)(me + 1);
     sem_depth++;
 }
 static void e_sem_init(const struct odt_cenv *e, struct odt_SignalSemaphore *s) { (void)e; memset(s, 0, sizeof *s); }
@@ -278,6 +297,8 @@ static void e_signal_stop(const struct odt_cenv *e, void *proc)
     ((struct pend *)proc)->stopped = 1;
 }
 static int e_check_stop(const struct odt_cenv *e) { (void)e; return cur >= 0 ? pend[cur].stopped : 0; }
+static char tasks[17];                  /* the program, then each process */
+static void *e_this_task(const struct odt_cenv *e) { (void)e; return &tasks[cur + 1]; }
 static void run_one(int i)
 {
     int was = cur;
@@ -326,6 +347,7 @@ static void env_init(void)
     cenv.start_process = e_start;
     cenv.signal_stop = e_signal_stop;
     cenv.check_stop = e_check_stop;
+    cenv.this_task = e_this_task;
 }
 
 /* ---- the run ---------------------------------------------------------------------- */
@@ -377,7 +399,6 @@ int main(int argc, char **argv)
 {
     char line[512], *w[16];
     FILE *f;
-    long base;
     if (argc < 2 || !(f = fopen(argv[1], "r"))) { printf("usage: %s script\n", argv[0]); return 2; }
     env_init();
     if (!oi_boopsi_init(&oenv, &boopsi, builtin_entry) || !oi_classes_init(&oenv, &boopsi, &oic)) {
@@ -505,6 +526,15 @@ int main(int argc, char **argv)
             async_on = atoi(w[1]);
         } else if (!strcmp(w[0], "runproc")) {
             run_procs();
+            if (self_gone) {
+                obj = NULL;
+                active = 0;
+                self_gone = 0;
+                printf("dispose %ld %d\n", live - base, sem_depth);
+            }
+        } else if (!strcmp(w[0], "selfdispose")) {
+            selfdispose = 1;
+            the_obj = obj;
         } else if (!strcmp(w[0], "print")) {
             struct odt_dtPrint m = { ODT_DTM_PRINT, NULL, NULL, NULL };
             printf("print %lu\n", (unsigned long)odt_print_object(&cenv, obj, NULL, NULL, &m));

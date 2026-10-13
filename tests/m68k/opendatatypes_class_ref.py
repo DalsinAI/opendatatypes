@@ -61,6 +61,7 @@ class Model:
         self.out = []
         self.o = None
         self.async_on = 0
+        self.selfdispose = 0
         self.pend = []          # [printing, stopped, initial]
 
     def p(self, s):
@@ -140,14 +141,29 @@ class Model:
 
     def runproc(self):
         o = self.o
+        gone = 0
         for printing, stopped, initial in self.pend:
+            if printing is None:        # waited for by a dispose already
+                continue
             if printing:
                 self.p("print")
-                o.printer_proc = None
                 self.notify(0, [("pstat", 0)])
+                if self.selfdispose:
+                    # the target disposes it from the print process: still printing
+                    self.selfdispose = 0
+                    self.dispose(1)
+                    gone = 1
+                    continue
+                o.printer_proc = None
             elif not stopped:
                 self.run_layout(initial)
+                if self.selfdispose:
+                    self.selfdispose = 0
+                    self.dispose(1)
+                    gone = 1
         self.pend = []
+        if gone:
+            self.p("dispose 0 0")
 
     def print_(self):
         o = self.o
@@ -272,15 +288,16 @@ class Model:
         else:
             self.p("written 0")
 
-    def dispose(self):
+    def dispose(self, from_proc=0):
         o = self.o
         # a print not yet run: asked to stop, then waited for (it holds
-        # print_lock from before PrintDTObjectA answers)
+        # proc_lock from before PrintDTObjectA answers); from the print's
+        # own notification, it is only asked
         if o.printer_proc is not None:
             self.p("stop %d" % o.printer_proc)
         if o.layout_proc is not None:
             self.p("stop %d" % o.layout_proc)
-        if o.printer_proc is not None:
+        if o.printer_proc is not None and not from_proc:
             self.p("print")
             o.printer_proc = None
             self.notify(0, [("pstat", 0)])
@@ -289,8 +306,9 @@ class Model:
             self.p("iffclose")
         if o.kind in ("iff", "file"):
             self.p("close 7")
-        self.p("dispose 0 0")
+        self.p("selfdispose 0" if from_proc else "dispose 0 0")
         self.o = None
+        self.pend = [[None, 1, 0] for _ in self.pend]
 
 
 def main():
@@ -389,6 +407,23 @@ def main():
             m.print_()
         cmd("dispose")
         m.dispose()
+
+    # the completion's target disposes the object, from the process itself
+    for kind, what in (("file", "p"), ("mem", "l")):
+        cmd("new %s 50 80" % kind)
+        m.new(kind, 50, 80, False)
+        cmd("async 1")
+        m.async_on = 1
+        cmd("selfdispose")
+        m.selfdispose = 1
+        if what == "l":
+            cmd("layout 120 90 1")
+            m.layout(120, 90, 1)
+        else:
+            cmd("print")
+            m.print_()
+        cmd("runproc")
+        m.runproc()
 
     # LaunchToolA's command lines, AmigaDOS quoting (* before " and *)
     def tool(prog, proj, size):

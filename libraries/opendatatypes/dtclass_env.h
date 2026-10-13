@@ -494,6 +494,10 @@ struct odt_cenv {
 
     /* UnLock, for DTA_Handle's file lock the object takes over; optional */
     void (*unlock)(const struct odt_cenv *env, odt_u32 lock);
+
+    /* FindTask(NULL): which task runs now (a process's notification that
+     * comes back to it as OM_DISPOSE); optional */
+    void *(*this_task)(const struct odt_cenv *env);
 };
 
 /* ---- datatypesclass's instance (private to datatypesclass and the library) ---- */
@@ -544,7 +548,8 @@ struct odt_dtinst {
     void *class_library;                /* the class library NewDTObjectA opened for it */
     struct odt_SignalSemaphore proc_lock; /* held shared by the layout and print processes */
     odt_u32 lock;                       /* DTA_Handle's file lock (DTST_FILE): the object's, UnLocked with it */
-    odt_u32 reserved[4];
+    void *proc_note[2];                 /* the layout's and the print's process, notifying at its end */
+    odt_u32 reserved[2];
 };
 #define ODT_DTF_BUSY      0x0001        /* DTA_Busy */
 #define ODT_DTF_SYNC      0x0002        /* DTA_Sync: laid out and current */

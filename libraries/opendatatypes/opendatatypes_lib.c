@@ -970,6 +970,7 @@ static int ce_check_stop(const struct odt_cenv *e) { return (SetSignal(0, 0) & S
 
 static const char *ce_dt_string(const struct odt_cenv *e, odt_u32 id);
 static void ce_unlock(const struct odt_cenv *e, odt_u32 lock) { (void)e; UnLock((BPTR)lock); }
+static void *ce_this_task(const struct odt_cenv *e) { (void)e; return FindTask(NULL); }
 
 static struct odt_cenv cenv = {
     NULL, NULL,
@@ -984,7 +985,8 @@ static struct odt_cenv cenv = {
     ce_start_process, ce_signal_stop, ce_check_stop,
     ce_dt_string,
     NULL,
-    ce_unlock
+    ce_unlock,
+    ce_this_task
 };
 
 /* datatypesclass's dispatcher, as Intuition calls a class's hook */

@@ -125,6 +125,20 @@ static void notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo 
     env->do_method(env, obj, &m);
 }
 
+/* A layout or print process's notification at its end, proc_lock held:
+ * its target may dispose the object from inside it, on this process
+ * (end_procs), and then gone says the object is no more */
+struct proc_note { void *task; int gone; };
+static void proc_notify(const struct odt_cenv *env, void *obj, int which, struct odt_GadgetInfo *gi,
+                        const struct odt_TagItem *extra, int nextra, struct proc_note *pn)
+{
+    struct odt_dtinst *d = ODT_DTINST(env, obj);
+    pn->task = env->this_task ? env->this_task(env) : NULLP;
+    d->proc_note[which] = pn;
+    notify(env, obj, gi, 0, extra, nextra);
+    if (!pn->gone) d->proc_note[which] = NULLP;
+}
+
 /* GM_RENDER with GREDRAW_UPDATE in the gadget's own RastPort: what a
  * scroll does (the class draws the difference from si_OTop*) */
 static void render_update(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo *gi)
@@ -442,6 +456,21 @@ static void end_procs(const struct odt_cenv *env, struct odt_dtinst *d)
 {
     stop_print(env, d);
     stop_layout(env, d);
+    /* from a process's own notification at its end (its ICA_TARGET
+     * disposing the object): that process lets go of its shared hold
+     * here, as it can't wait for itself, and touches the object no more */
+    if (env->this_task) {
+        void *me = env->this_task(env);
+        int i;
+        for (i = 0; i < 2; i++) {
+            struct proc_note *pn = d->proc_note[i];
+            if (pn && pn->task == me) {
+                pn->gone = 1;
+                d->proc_note[i] = NULLP;
+                env->sem_release(env, &d->proc_lock);
+            }
+        }
+    }
     env->sem_obtain(env, &d->proc_lock);
     env->sem_release(env, &d->proc_lock);
 }
@@ -459,6 +488,7 @@ static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj
     d = ODT_INST_DATA(cl, o);
     env->sem_init(env, &d->si.si_Lock);
     env->sem_init(env, &d->proc_lock);
+    d->proc_note[0] = d->proc_note[1] = NULLP;
     d->si.si_VertUnit = d->si.si_HorizUnit = 1;
     d->source_type = ODT_DTST_FILE;
     g->SpecialInfo = &d->si;
@@ -811,8 +841,9 @@ odt_u32 odt_dtclass_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, 
 
 /* ---- the library's object calls -------------------------------------------------- */
 
-static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl, int process)
+static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl, struct proc_note *pn)
 {
+    int process = pn != NULLP;
     struct odt_dtinst *d = ODT_DTINST(env, obj);
     struct odt_gpLayout m;
     struct odt_TagItem t[2];
@@ -840,7 +871,8 @@ static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpL
     /* the program hears it's done (DTA_Sync) and redraws the object */
     t[0].ti_Tag = ODT_DTA_Busy; t[0].ti_Data = 0;
     t[1].ti_Tag = ODT_DTA_Sync; t[1].ti_Data = 1;
-    notify(env, obj, gpl->gpl_GInfo, 0, t, 2);
+    if (pn) proc_notify(env, obj, 0, gpl->gpl_GInfo, t, 2, pn);
+    else notify(env, obj, gpl->gpl_GInfo, 0, t, 2);
     return r;
 }
 
@@ -849,8 +881,11 @@ static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpL
 odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl)
 {
     struct odt_dtinst *d = ODT_DTINST(env, obj);
-    odt_u32 r = layout_body(env, obj, gpl, 1);
-    env->sem_release(env, &d->proc_lock);
+    struct proc_note pn;
+    odt_u32 r;
+    pn.gone = 0;
+    r = layout_body(env, obj, gpl, &pn);
+    if (!pn.gone) env->sem_release(env, &d->proc_lock);
     return r;
 }
 
@@ -874,7 +909,7 @@ odt_u32 odt_do_async_layout(const struct odt_cenv *env, void *obj, struct odt_gp
         return 1;
     }
     /* no process: lay out here (ABI test: whether OS 3.2 fails instead) */
-    layout_body(env, obj, gpl, 0);
+    layout_body(env, obj, gpl, NULLP);
     env->sem_release(env, &d->si.si_Lock);
     return 1;
 }
@@ -894,13 +929,16 @@ odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint 
 {
     struct odt_dtinst *d = ODT_DTINST(env, obj);
     struct odt_TagItem t[1];
+    struct proc_note pn;
     odt_u32 r;
     env->sem_obtain(env, &d->si.si_Lock);     /* PrintDTObjectA has recorded us */
     env->sem_release(env, &d->si.si_Lock);
     r = env->do_method(env, obj, msg);
     d->printer_status = r;
     t[0].ti_Tag = ODT_DTA_PrinterStatus; t[0].ti_Data = r;
-    notify(env, obj, msg->dtp_GInfo, 0, t, 1);
+    pn.gone = 0;
+    proc_notify(env, obj, 1, msg->dtp_GInfo, t, 1, &pn);
+    if (pn.gone) return r;                    /* disposed from the notification */
     d->printer_proc = NULLP;
     d->si.si_Flags &= ~ODT_DTSIF_PRINTING;
     env->sem_release(env, &d->proc_lock);
