@@ -434,15 +434,15 @@ static void stop_print(const struct odt_cenv *env, struct odt_dtinst *d)
     if (d->printer_proc && env->signal_stop) env->signal_stop(env, d->printer_proc);
 }
 
-/* Disposal: asks a running print to stop, then waits for it to end (it
- * holds print_lock while it runs, as a layout holds si_Lock) */
+/* Disposal: asks a running print to stop, then waits for it to end. The
+ * print process holds print_lock from before PrintDTObjectA returns
+ * (odt_print_hold) to its last touch of the object, so taking the lock,
+ * always, waits out a print however far it has got. */
 static void end_print(const struct odt_cenv *env, struct odt_dtinst *d)
 {
     stop_print(env, d);
-    if (d->printer_proc || (d->si.si_Flags & ODT_DTSIF_PRINTING)) {
-        env->sem_obtain(env, &d->print_lock);
-        env->sem_release(env, &d->print_lock);
-    }
+    env->sem_obtain(env, &d->print_lock);
+    env->sem_release(env, &d->print_lock);
 }
 
 static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj, struct odt_opSet *m)
@@ -874,21 +874,29 @@ odt_u32 odt_do_async_layout(const struct odt_cenv *env, void *obj, struct odt_gp
     return 1;
 }
 
+/* The print process's first step, before start_process answers: it holds
+ * print_lock until odt_print_run's end, so OM_DISPOSE waits for it */
+void odt_print_hold(const struct odt_cenv *env, void *obj)
+{
+    env->sem_obtain(env, &ODT_DTINST(env, obj)->print_lock);
+}
+
+/* The print process's work, print_lock held (odt_print_hold). Printing
+ * shows (DTA_PrinterProc, PrintDTObjectA refusing another) until the last
+ * touch of the object but the lock's release. */
 odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint *msg)
 {
     struct odt_dtinst *d = ODT_DTINST(env, obj);
     struct odt_TagItem t[1];
     odt_u32 r;
-    /* held until the end: OM_DISPOSE waits on it before freeing the object */
-    env->sem_obtain(env, &d->print_lock);
     env->sem_obtain(env, &d->si.si_Lock);     /* PrintDTObjectA has recorded us */
     env->sem_release(env, &d->si.si_Lock);
     r = env->do_method(env, obj, msg);
     d->printer_status = r;
-    d->printer_proc = NULLP;
-    d->si.si_Flags &= ~ODT_DTSIF_PRINTING;
     t[0].ti_Tag = ODT_DTA_PrinterStatus; t[0].ti_Data = r;
     notify(env, obj, msg->dtp_GInfo, 0, t, 1);
+    d->printer_proc = NULLP;
+    d->si.si_Flags &= ~ODT_DTSIF_PRINTING;
     env->sem_release(env, &d->print_lock);
     return r;
 }

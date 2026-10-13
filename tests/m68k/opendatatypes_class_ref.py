@@ -274,6 +274,13 @@ class Model:
 
     def dispose(self):
         o = self.o
+        # a print not yet run: asked to stop, then waited for (it holds
+        # print_lock from before PrintDTObjectA answers)
+        if o.printer_proc is not None:
+            self.p("stop %d" % o.printer_proc)
+            self.p("print")
+            o.printer_proc = None
+            self.notify(0, [("pstat", 0)])
         if o.kind in ("iff", "clip"):
             self.p("iffclose")
         if o.kind in ("iff", "file"):
@@ -360,6 +367,18 @@ def main():
         m.get()
         cmd("runproc")
         m.runproc()
+        cmd("dispose")
+        m.dispose()
+
+    # disposed with its print started but not yet run: OM_DISPOSE waits for
+    # the print before it frees the object
+    for kind in ("file", "mem"):
+        cmd("new %s 50 80" % kind)
+        m.new(kind, 50, 80, False)
+        cmd("async 1")
+        m.async_on = 1
+        cmd("print")
+        m.print_()
         cmd("dispose")
         m.dispose()
 

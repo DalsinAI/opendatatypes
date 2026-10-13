@@ -178,15 +178,29 @@ static void e_dispose(const struct odt_cenv *e, void *obj) { (void)e; oi_Dispose
 static void *e_alloc(const struct odt_cenv *e, odt_u32 n) { (void)e; live++; return calloc(1, n); }
 static void e_free(const struct odt_cenv *e, void *p) { (void)e; if (p) { live--; free(p); } }
 
-/* semaphores: a count each, which must balance */
+/* semaphores: a count each, which must balance, and who holds it
+ * (opaque[1]: 1 the program, 2 + n started process n); one another holds
+ * is waited for: that process runs to its end first */
 static int sem_depth;
+static int cur = -1;
+static void run_one(int i);
 static void e_sem_init(const struct odt_cenv *e, struct odt_SignalSemaphore *s) { (void)e; memset(s, 0, sizeof *s); }
-static void e_sem_obtain(const struct odt_cenv *e, struct odt_SignalSemaphore *s) { (void)e; s->opaque[0]++; sem_depth++; }
+static void e_sem_obtain(const struct odt_cenv *e, struct odt_SignalSemaphore *s)
+{
+    (void)e;
+    if (s->opaque[0] && s->opaque[1] != cur + 2) {
+        if (s->opaque[1] >= 2) run_one(s->opaque[1] - 2);
+        if (s->opaque[0]) printf("FAIL a semaphore another holds\n");
+    }
+    s->opaque[0]++;
+    s->opaque[1] = (odt_u8)(cur + 2);
+    sem_depth++;
+}
 static void e_sem_release(const struct odt_cenv *e, struct odt_SignalSemaphore *s)
 {
     (void)e;
     if (!s->opaque[0]) printf("FAIL release of a semaphore not held\n");
-    s->opaque[0]--;
+    if (!--s->opaque[0]) s->opaque[1] = 0;
     sem_depth--;
 }
 
@@ -227,7 +241,7 @@ static void e_box(const struct odt_cenv *e, void *rp, odt_s32 x0, odt_s32 y0, od
 /* processes: started ones wait until the script's runproc runs them in order */
 struct pend { int printing, stopped, live; void *obj; struct odt_gpLayout gpl; struct odt_dtPrint pr; };
 static struct pend pend[16];
-static int npend, cur = -1, async_on;
+static int npend, async_on;
 static void *e_start(const struct odt_cenv *e, int printing, void *o, void *win, void *req, void *msg)
 {
     struct pend *p;
@@ -241,6 +255,12 @@ static void *e_start(const struct odt_cenv *e, int printing, void *o, void *win,
     if (printing) p->pr = *(struct odt_dtPrint *)msg;
     else p->gpl = *(struct odt_gpLayout *)msg;
     printf("start %d %s\n", npend, printing ? "print" : "layout");
+    if (printing) {                     /* its first step, before we answer */
+        int was = cur;
+        cur = npend;
+        odt_print_hold(&cenv, o);
+        cur = was;
+    }
     return &pend[npend++];
 }
 static void e_signal_stop(const struct odt_cenv *e, void *proc)
@@ -250,15 +270,20 @@ static void e_signal_stop(const struct odt_cenv *e, void *proc)
     ((struct pend *)proc)->stopped = 1;
 }
 static int e_check_stop(const struct odt_cenv *e) { (void)e; return cur >= 0 ? pend[cur].stopped : 0; }
+static void run_one(int i)
+{
+    int was = cur;
+    if (i < 0 || i >= npend || !pend[i].live) return;
+    cur = i;
+    if (pend[i].printing) odt_print_run(&cenv, pend[i].obj, &pend[i].pr);
+    else odt_layout_run(&cenv, pend[i].obj, &pend[i].gpl);
+    pend[i].live = 0;
+    cur = was;
+}
 static void run_procs(void)
 {
-    for (cur = 0; cur < npend; cur++) {
-        if (!pend[cur].live) continue;
-        if (pend[cur].printing) odt_print_run(&cenv, pend[cur].obj, &pend[cur].pr);
-        else odt_layout_run(&cenv, pend[cur].obj, &pend[cur].gpl);
-        pend[cur].live = 0;
-    }
-    cur = -1;
+    int i;
+    for (i = 0; i < npend; i++) run_one(i);
     npend = 0;
 }
 
