@@ -4,6 +4,16 @@
  */
 #include "animation_core.h"
 
+/* DTA_TriggerMethods: what DTM_TRIGGER does (labels: ours; ABI test) */
+static const struct odt_DTMethod adt_triggers[] = {
+    { "Play", "PLAY", ODT_STM_PLAY },
+    { "Pause", "PAUSE", ODT_STM_PAUSE },
+    { "Stop", "STOP", ODT_STM_STOP },
+    { "Rewind", "REWIND", ODT_STM_REWIND },
+    { "Fast Forward", "FASTFORWARD", ODT_STM_FASTFORWARD },
+    { 0, 0, 0 }
+};
+
 const odt_u32 adt_methods[] = {
     ODT_OM_NEW, ODT_OM_DISPOSE, ODT_OM_SET, ODT_OM_GET, ODT_OM_UPDATE,
     ODT_GM_LAYOUT, ODT_GM_RENDER, ODT_GM_HITTEST, ODT_GM_GOACTIVE, ODT_GM_HANDLEINPUT, ODT_GM_GOINACTIVE,
@@ -187,9 +197,10 @@ static void obtain_pens(const struct odt_cenv *env, struct adt_inst *in)
     in->num_alloc = 0;
     for (i = 0; i < in->num_colors && i < 256; i++) {
         odt_s32 pen = x->obtain_pen(env, in->screen, in->cregs[3 * i], in->cregs[3 * i + 1], in->cregs[3 * i + 2]);
-        if (pen < 0) pen = 0;
-        in->color_table[i] = in->color_table2[i] = (odt_u8)pen;
-        in->allocated[in->num_alloc++] = (odt_u8)pen;
+        /* a colour no pen could take shows as pen 0, which is not ours to give back */
+        in->color_table[i] = in->color_table2[i] = (odt_u8)(pen < 0 ? 0 : pen);
+        if (pen >= 0)
+            in->allocated[in->num_alloc++] = (odt_u8)pen;
     }
     in->pens_got = 1;
     in->pens_screen = in->screen;
@@ -402,9 +413,20 @@ static int set_attrs(const struct odt_cenv *env, struct adt_inst *in, const stru
         case ADT_ADTA_PreloadFrameCount: in->preload = d ? d : 1; break;
         case ADT_ADTA_ModeID: in->mode_id = d; break;
         case ADT_ADTA_KeyFrame: in->key_frame = (struct adt_BitMap *)d; changed = 1; break;
-        case ADT_ADTA_NumColors: set_colors(env, in, d); break;
-        case ADT_ADTA_Remap: in->remap = d != 0; break;
-        case ADT_ADTA_Screen: in->screen = (void *)d; break;
+        case ADT_ADTA_NumColors:
+            /* the pens go back before their table does; the frames are remapped again */
+            release_pens(env, in);
+            set_colors(env, in, d);
+            in->remap_stale = 1;
+            break;
+        case ADT_ADTA_Remap:
+            if ((d != 0) != in->remap) in->remap_stale = 1;
+            in->remap = d != 0;
+            break;
+        case ADT_ADTA_Screen:
+            if ((void *)d != in->screen) in->remap_stale = 1;
+            in->screen = (void *)d;
+            break;
         case ADT_ADTA_NumSparse: in->num_sparse = d; break;
         case ADT_ADTA_SparseTable: in->sparse = (odt_u8 *)d; break;
         case ADT_ADTA_Sample: in->sample = (odt_s8 *)d; break;
@@ -457,6 +479,7 @@ static int get_attr(struct adt_inst *in, odt_u32 tag, odt_u32 *v)
     case ADT_ADTA_RightSample: *v = (odt_u32)in->right; return 1;
     case ADT_ADTA_SamplesPerSec: *v = in->sps; return 1;
     case ODT_DTA_Methods: *v = (odt_u32)adt_methods; return 1;
+    case ODT_DTA_TriggerMethods: *v = (odt_u32)adt_triggers; return 1;
     default: return 0;
     }
 }
@@ -595,6 +618,17 @@ static odt_u32 locate(const struct odt_cenv *env, struct adt_inst *in, void *obj
     return 1;
 }
 
+/* Play, pause or stop asked by the program (a method or a trigger): as the
+ * panel's buttons do, the frame told (stop goes to frame 0) and redrawn */
+static odt_u32 controlled(const struct odt_cenv *env, struct adt_inst *in, void *obj, odt_u32 state, odt_u32 frame)
+{
+    odt_u32 was = in->play.frame, r;
+    r = state == ADT_PLAYING ? start(env, in, obj, frame) : pause_(env, in, obj, state);
+    if (in->play.frame != was) tell_frame(env, in, obj, in->have_gi ? &in->gi : 0);
+    redraw(env, in, obj);
+    return r;
+}
+
 void adt_tick(const struct odt_cenv *env, struct odt_IClass *cl, void *obj)
 {
     struct adt_inst *in = ODT_INST_DATA(cl, obj);
@@ -671,9 +705,12 @@ odt_u32 adt_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *ob
         in->cycles = 1;
         in->repeat = 1;
         adt_play_init(&in->play, 0);
-        if (dtc_get(env, o, ODT_DTA_ControlPanel, &v)) in->panel = v != 0;
-        else in->panel = 1;             /* (ABI test) */
+        /* on unless the creation tags say: datatypesclass always answers
+         * DTA_ControlPanel (FALSE by default), so its answer can't tell */
+        (void)v;
+        in->panel = 1;                  /* (ABI test) */
         set_attrs(env, in, ops->ops_AttrList);
+        in->remap_stale = 0;
         return (odt_u32)o;
     }
     case ODT_OM_DISPOSE:
@@ -690,6 +727,12 @@ odt_u32 adt_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *ob
         const struct odt_TagItem *t = dtc_find_tag(ops->ops_AttrList, ADT_ADTA_Frame);
         lock(env, obj);
         r += (odt_u32)set_attrs(env, in, ops->ops_AttrList);
+        if (in->remap_stale) {
+            /* frames remapped for the old pens or screen: loaded again */
+            release_pens(env, in);
+            adt_cache_flush(env, in, obj);
+            in->remap_stale = 0;
+        }
         unlock(env, obj);
         if (t && t->ti_Data != frame && t->ti_Data < in->frames) {
             in->play.frame = frame;
@@ -770,18 +813,18 @@ odt_u32 adt_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *ob
         struct odt_dtTrigger *t = msg;
         switch (t->dtt_Function & ODT_STMF_METHOD_MASK) {
         case ODT_STM_PLAY:
-        case ODT_STM_RESUME: return start(env, in, obj, in->play.frame);
-        case ODT_STM_PAUSE: return pause_(env, in, obj, ADT_PAUSED);
-        case ODT_STM_STOP: return pause_(env, in, obj, ADT_STOPPED);
+        case ODT_STM_RESUME: return controlled(env, in, obj, ADT_PLAYING, in->play.frame);
+        case ODT_STM_PAUSE: return controlled(env, in, obj, ADT_PAUSED, 0);
+        case ODT_STM_STOP: return controlled(env, in, obj, ADT_STOPPED, 0);
         case ODT_STM_REWIND: return locate(env, in, obj, 0, t->dtt_GInfo);
         case ODT_STM_FASTFORWARD: return locate(env, in, obj, in->frames ? in->frames - 1 : 0, t->dtt_GInfo);
         case ODT_STM_LOCATE: return locate(env, in, obj, (odt_u32)t->dtt_Data, t->dtt_GInfo);
         default: return env->do_super(env, cl, obj, msg);
         }
     }
-    case ADT_ADTM_START: return start(env, in, obj, ((struct adt_Start *)msg)->asa_Frame);
-    case ADT_ADTM_PAUSE: return pause_(env, in, obj, ADT_PAUSED);
-    case ADT_ADTM_STOP: return pause_(env, in, obj, ADT_STOPPED);
+    case ADT_ADTM_START: return controlled(env, in, obj, ADT_PLAYING, ((struct adt_Start *)msg)->asa_Frame);
+    case ADT_ADTM_PAUSE: return controlled(env, in, obj, ADT_PAUSED, 0);
+    case ADT_ADTM_STOP: return controlled(env, in, obj, ADT_STOPPED, 0);
     case ADT_ADTM_LOCATE: return locate(env, in, obj, ((struct adt_Start *)msg)->asa_Frame, 0);
     case ADT_ADTM_LOADFRAME: {
         /* a subclass that loads no frames: the key frame is every frame (ABI test) */

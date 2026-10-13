@@ -77,7 +77,8 @@ Open: whether the mask outranks the priority in every case.
   IFFHandle on the memory for an IFF type, NULL for others (the class
   reads DTA_SourceAddress and DTA_SourceSize); DTST_RAM nothing.
   OM_DISPOSE stops the layout and printing processes, waits for the
-  layout (it takes si_Lock) and closes the source.
+  layout (it takes si_Lock) and the print (its process holds a lock of
+  its own while it runs) and closes the source.
 - **Scrolling.** DTA_TopVert and DTA_TopHoriz are clamped to 0 ..
   total - visible; a change keeps the old top in si_OTop*. Set by the
   program or the class (OM_SET), every change of the six scroll numbers
@@ -115,6 +116,10 @@ or open ("ABI test": `DatatypesABITest OBJ` has the PROBE line).
 | DTST_HOTLINK | NULL, ERROR_NOT_IMPLEMENTED | ABI test |
 | DTST_MEMORY, non-IFF type: DTA_Handle | NULL | ABI test |
 | DTST_CLIPBOARD: the name | the unit number | documented |
+| DTST_CLIPBOARD with DTA_Handle | the program's IFFHandle, recognised and used as the source; not closed with the object | documented (who frees it: ABI test) |
+| DTST_FILE with DTA_Handle | the name is what is opened (a lock alone fails, the autodoc's BUGS); the lock becomes the object's and is UnLocked with it | documented |
+| AddDTObject | AddGList, then GM_LAYOUT with gpl_Initial 1 for an object without relative size (Intuition sends the others theirs) | documented |
+| SetDTAttrsA with a window | SetGadgetAttrsA; a nonzero answer refreshes the object | ours (ABI test) |
 | ObtainDataTypeA DTST_CLIPBOARD | the handle is an IFFHandle; parsed one step if it has no chunk yet, the FORM's type recognised | ABI test (how far OS 3.2 parses) |
 | Top beyond the end, or negative | clamped | ABI test |
 | Visible numbers at GM_LAYOUT | domain / unit, the class may set its own | ABI test |
@@ -122,7 +127,7 @@ or open ("ABI test": `DatatypesABITest OBJ` has the PROBE line).
 | GetDTAttrsA's answer | how many tags the object knew; NULL object 0 | ABI test |
 | DTA_Methods of a class with none of its own | datatypesclass's list | ABI test |
 | DTM_FRAMEBOX default | FRAMEF_SPECIFY keeps the frame; else the contents' frame, else the kept one; 1 | ABI test |
-| DTM_WRITE DTWM_RAW default | the source's bytes (file or memory); otherwise 0, ERROR_NOT_IMPLEMENTED | ABI test |
+| DTM_WRITE DTWM_RAW default | the source's bytes (a file, the file under an IFF type's handle, or memory), the file's position put back; otherwise 0, ERROR_NOT_IMPLEMENTED | ABI test |
 | SaveDTObjectA that fails | the file deleted, IoErr kept (else DTERROR_COULDNT_SAVE) | ABI test |
 | SaveDTObjectA's icon | ENV:Sys/def_project, else icon.library's default project | ABI test |
 | DTM_PROCLAYOUT default | GM_LAYOUT's part only | ABI test |

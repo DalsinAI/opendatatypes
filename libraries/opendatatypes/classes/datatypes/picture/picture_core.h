@@ -145,6 +145,7 @@ struct pic_inst {
     odt_u32 pw, ph;                     /* size of pixels */
     odt_u32 dw, dh;                     /* size of destbm */
     odt_u32 scale_w, scale_h, scale_flags;
+    odt_u32 draw_holds;                 /* ObtainDTDrawInfo handles holding si_Lock */
 };
 #define PIC_F_REMAP      0x0001
 #define PIC_F_FREESRC    0x0002

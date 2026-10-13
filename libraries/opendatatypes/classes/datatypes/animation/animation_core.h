@@ -254,7 +254,7 @@ struct adt_inst {
     odt_u8 newformat;                   /* ADTM_LOADNEWFORMATFRAME answered */
     odt_u8 pens_got;                    /* the pens are obtained */
     odt_u8 sound_on;                    /* ADTA_Sample is playing */
-    odt_u8 pad1;
+    odt_u8 remap_stale;                 /* Remap, Screen or NumColors changed: the cache's remaps go */
     void *pens_screen;                  /* the screen they are from */
     void *player;
     struct odt_GadgetInfo gi;           /* a copy, for drawing from the player */

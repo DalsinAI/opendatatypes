@@ -197,6 +197,9 @@ u32 load(env_t *env, odt_IClass *cl, void *obj)
     u32 rb = pic_rowbytes(w);
     bool hasmask = !pbm && masking == PIC_mskHasMask;
     u32 rowsize = pbm ? w + (w & 1) : rb * (depth + (hasmask ? 1 : 0));
+    /* 16-bit sizes and up to 32 planes can overflow 32 bits: no such picture */
+    if (h && rowsize > 0xffffffffUL / h)
+        return DTC_ERROR_NO_FREE_STORE;
     u32 rawlen = rowsize * h;
     u32 blen = bodylen > 0 ? static_cast<u32>(bodylen) : 0;
     u8 *body = static_cast<u8 *>(env->alloc(env, blen + 1));

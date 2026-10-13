@@ -148,7 +148,7 @@ static int is_iff_type(const struct odt_DataType *dt)
 }
 
 /* Opens what DTA_SourceType names; 0, or the IoErr to fail OM_NEW with */
-static odt_s32 open_source(const struct odt_cenv *env, struct odt_dtinst *d, odt_u32 unit)
+static odt_s32 open_source(const struct odt_cenv *env, struct odt_dtinst *d, odt_u32 unit, void *given)
 {
     switch (d->source_type) {
     case ODT_DTST_FILE: {
@@ -170,8 +170,16 @@ static odt_s32 open_source(const struct odt_cenv *env, struct odt_dtinst *d, odt
     }
     case ODT_DTST_CLIPBOARD: {
         /* the clipboard is always IFF (FTXT, ILBM...); the unit is the
-         * number NewDTObjectA had for a name */
-        void *iff = env->iff_open_clip ? env->iff_open_clip(env, unit, 0) : NULLP;
+         * number NewDTObjectA had for a name, or DTA_Handle is the
+         * program's IFFHandle on it (the autodoc), used as it is and left
+         * to the program to free (ABI test) */
+        void *iff;
+        if (given) {
+            d->handle = given;
+            d->handle_kind = ODT_HANDLE_GIVEN;
+            return 0;
+        }
+        iff = env->iff_open_clip ? env->iff_open_clip(env, unit, 0) : NULLP;
         if (!iff) return ODT_DTERROR_COULDNT_OPEN_CLIPBOARD;
         d->handle = iff;
         d->handle_kind = ODT_HANDLE_IFF;
@@ -207,6 +215,9 @@ static void close_source(const struct odt_cenv *env, struct odt_dtinst *d)
     d->handle = NULLP;
     d->handle_kind = ODT_HANDLE_NONE;
     d->fh = 0;
+    /* DTA_Handle's lock became the object's (the autodoc's NOTE) */
+    if (d->lock && env->unlock) env->unlock(env, d->lock);
+    d->lock = 0;
 }
 
 /* ---- attributes ------------------------------------------------------------------ */
@@ -423,18 +434,30 @@ static void stop_print(const struct odt_cenv *env, struct odt_dtinst *d)
     if (d->printer_proc && env->signal_stop) env->signal_stop(env, d->printer_proc);
 }
 
+/* Disposal: asks a running print to stop, then waits for it to end (it
+ * holds print_lock while it runs, as a layout holds si_Lock) */
+static void end_print(const struct odt_cenv *env, struct odt_dtinst *d)
+{
+    stop_print(env, d);
+    if (d->printer_proc || (d->si.si_Flags & ODT_DTSIF_PRINTING)) {
+        env->sem_obtain(env, &d->print_lock);
+        env->sem_release(env, &d->print_lock);
+    }
+}
+
 static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj, struct odt_opSet *m)
 {
     struct odt_dtinst *d;
     struct odt_Gadget *g;
     const struct odt_TagItem *tp = m->ops_AttrList, *t;
-    odt_u32 unit = 0, name = 0;
+    odt_u32 unit = 0, name = 0, handle = 0;
     odt_s32 err;
     void *o = (void *)env->do_super(env, cl, obj, m);
     if (!o) return NULLP;
     g = o;
     d = ODT_INST_DATA(cl, o);
     env->sem_init(env, &d->si.si_Lock);
+    env->sem_init(env, &d->print_lock);
     d->si.si_VertUnit = d->si.si_HorizUnit = 1;
     d->source_type = ODT_DTST_FILE;
     g->SpecialInfo = &d->si;
@@ -445,25 +468,32 @@ static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj
         case ODT_DTA_DataType:      d->datatype = (struct odt_DataType *)t->ti_Data; break;
         case ODT_DTA_SourceAddress: d->source_address = (const void *)t->ti_Data; break;
         case ODT_DTA_SourceSize:    d->source_size = t->ti_Data; break;
+        case ODT_DTA_Handle:        handle = t->ti_Data; break;
         }
     }
+    /* DTA_Handle: a lock for DTST_FILE (the object's from now; the name is
+     * still what is opened, the autodoc's BUGS), an IFFHandle for
+     * DTST_CLIPBOARD, nothing for the others */
+
     /* for the clipboard, the name is the unit's number */
     if (d->source_type == ODT_DTST_CLIPBOARD) unit = name;
     else sset(env, &d->name, (const char *)name);
     set_attrs(env, o, m->ops_AttrList, NULLP, 0, 1);
-    if ((err = open_source(env, d, unit)) != 0) {
+    if ((err = open_source(env, d, unit,
+                           d->source_type == ODT_DTST_CLIPBOARD ? (void *)handle : NULLP)) != 0) {
         /* the superclass's half goes; the class gets OM_DISPOSE for ours */
         env->coerce(env, cl, o, &(odt_u32){ ODT_OM_DISPOSE });
         if (env->set_io_err) env->set_io_err(env, err);
         return NULLP;
     }
+    if (d->source_type == ODT_DTST_FILE) d->lock = handle;
     return o;
 }
 
 static odt_u32 om_dispose(const struct odt_cenv *env, struct odt_IClass *cl, void *obj, void *m)
 {
     struct odt_dtinst *d = ODT_INST_DATA(cl, obj);
-    stop_print(env, d);
+    end_print(env, d);
     stop_layout(env, d);
     close_source(env, d);
     free_strings(env, d);
@@ -681,11 +711,19 @@ static odt_u32 write_raw(const struct odt_cenv *env, void *obj, struct odt_dtWri
             return 0;
         return 1;
     }
-    if (d->handle_kind != ODT_HANDLE_FILE) goto fail;
-    if (env->seek(env, (odt_u32)d->handle, 0, OFFSET_BEGINNING) < 0) return 0;
-    while ((n = env->read(env, (odt_u32)d->handle, buf, sizeof buf)) > 0)
-        if (env->write(env, m->dtw_FileHandle, buf, n) != n) return 0;
-    return n == 0;
+    {
+        /* a file, or the file under an IFF handle we opened: its bytes from
+         * the start, the position put back after for whoever still reads */
+        odt_u32 fh = d->handle_kind == ODT_HANDLE_FILE ? (odt_u32)d->handle
+                   : d->handle_kind == ODT_HANDLE_IFF ? d->fh : 0;
+        odt_s32 was;
+        if (!fh) goto fail;
+        if ((was = env->seek(env, fh, 0, OFFSET_BEGINNING)) < 0) return 0;
+        while ((n = env->read(env, fh, buf, sizeof buf)) > 0)
+            if (env->write(env, m->dtw_FileHandle, buf, n) != n) break;
+        env->seek(env, fh, was, OFFSET_BEGINNING);
+        return n == 0;
+    }
 fail:
     if (env->set_io_err) env->set_io_err(env, ERROR_NOT_IMPLEMENTED);
     return 0;
@@ -841,6 +879,8 @@ odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint 
     struct odt_dtinst *d = ODT_DTINST(env, obj);
     struct odt_TagItem t[1];
     odt_u32 r;
+    /* held until the end: OM_DISPOSE waits on it before freeing the object */
+    env->sem_obtain(env, &d->print_lock);
     env->sem_obtain(env, &d->si.si_Lock);     /* PrintDTObjectA has recorded us */
     env->sem_release(env, &d->si.si_Lock);
     r = env->do_method(env, obj, msg);
@@ -849,6 +889,7 @@ odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint 
     d->si.si_Flags &= ~ODT_DTSIF_PRINTING;
     t[0].ti_Tag = ODT_DTA_PrinterStatus; t[0].ti_Data = r;
     notify(env, obj, msg->dtp_GInfo, 0, t, 1);
+    env->sem_release(env, &d->print_lock);
     return r;
 }
 

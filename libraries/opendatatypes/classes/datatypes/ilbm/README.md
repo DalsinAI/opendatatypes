@@ -50,6 +50,7 @@ picture.datatype's ILBM writer.
 | Compression other than 0 and 1 | DTERROR_UNKNOWN_COMPRESSION | documented |
 | mskLasso | read as no mask | ABI test |
 | Odd PBM width | rows padded to even | documented |
+| A BMHD whose BODY size passes 32 bits (e.g. 32768x32768x32) | ERROR_NO_FREE_STORE before any allocation | ours |
 
 ## Not yet
 

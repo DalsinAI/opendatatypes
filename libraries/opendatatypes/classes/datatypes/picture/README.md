@@ -69,6 +69,11 @@ or AROS code, nor any third-party datatype). Step D4 of
 | ILBM aspect when the BitMapHeader has none | 1:1 | ABI test |
 | `DTM_FRAMEBOX` flags | DIPF_IS_LACE/HAM/EXTRAHALFBRITE from the mode; 8 bits a gun; FIF_REMAPPABLE, FIF_SCALABLE | ABI test |
 | `OBP_Precision` passed to NewDTObject (bitmap.image does) | taken as the pens' precision | ABI test |
+| `PDTA_UseFriendBitMap` default | TRUE | documented (V43 autodoc); ABI test probes it |
+| `PDTA_FreeSourceBitMap` | the source bitmap freed as soon as a layout has the pixels read from it | documented |
+| A mask that cannot be allocated | the layout fails (ERROR_NO_FREE_STORE), the destination freed | ours |
+| `PDTM_SCALE` or a picture past 65535 pixels a side | refused (a BitMap's sizes are 16 bits); 4-byte pixel buffers checked before multiplying | ours |
+| `DTM_OBTAINDRAWINFO` | lays out and holds `si_Lock` until the matching `DTM_RELEASEDRAWINFO` (a layout waits) | ours |
 | `GM_LAYOUT` | passed to datatypesclass, which runs `DTM_ASYNCLAYOUT` (dt-d2); the picture is made there or at `DTM_PROCLAYOUT` | documented |
 
 ## Not yet

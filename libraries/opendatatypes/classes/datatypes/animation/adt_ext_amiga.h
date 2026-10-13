@@ -307,7 +307,14 @@ static void ax_player_main(void)
     }
     if (tr) DeleteIORequest((struct IORequest *)tr);
     if (tport) DeleteMsgPort(tport);
-    FreeVec(p);
+    /* the last of our code runs under Forbid: whoever stopped us hears it
+     * only once this process is gone, so the library can't be unloaded
+     * under it (with no one waiting, p is ours to free) */
+    Forbid();
+    if (p->msg.mn_ReplyPort)
+        ReplyMsg(&p->msg);
+    else
+        FreeVec(p);
 }
 
 static void *ax_player_start(const struct odt_cenv *e, struct odt_IClass *cl, void *obj, odt_u32 fps)
@@ -335,19 +342,30 @@ static void *ax_player_start(const struct odt_cenv *e, struct odt_IClass *cl, vo
     return p;
 }
 
-/* Waits for a tick under way to end; the process then goes by itself
- * and frees p. Safe from any task (no dos calls). */
+/* Stops the process and waits until it is gone (its start message comes
+ * back as its last act, under Forbid), then frees p: nothing of ours runs
+ * after this returns, so the library may be closed and expunged. Safe
+ * from any task (no dos calls). From the process itself, or with no port
+ * for the answer, it doesn't wait: the process frees p as it goes. */
 static void ax_player_stop(const struct odt_cenv *e, void *pp)
 {
     struct ax_player *p = pp;
     struct Process *proc;
+    struct MsgPort *port;
     (void)e;
     if (!p) return;
-    ObtainSemaphore(&p->sem);
-    p->stop = 1;
     proc = p->proc;
+    port = FindTask(NULL) != &proc->pr_Task ? CreateMsgPort() : NULL;
+    ObtainSemaphore(&p->sem);
+    p->msg.mn_ReplyPort = port;
+    p->stop = 1;
     Signal(&proc->pr_Task, SIGBREAKF_CTRL_C);
     ReleaseSemaphore(&p->sem);
+    if (!port) return;
+    while (!GetMsg(port))
+        WaitPort(port);
+    DeleteMsgPort(port);
+    FreeVec(p);
 }
 
 #endif /* ADT_EXT_BITMAPS_ONLY */

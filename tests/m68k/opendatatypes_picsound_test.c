@@ -791,6 +791,44 @@ static void cmd_snd(char **a)
     printf("live %ld\n", live - base);
 }
 
+/* SDTA_VoiceHeader set (its rate and volume taken), then SDTA_SampleLength 0
+ * while the sound plays (which stops it) */
+static void cmd_sndvh(char **a)
+{
+    odt_u32 len = (odt_u32)atol(a[0]), i;
+    long base = live;
+    void *o = new_obj(&cl_snd, ODT_DTST_RAM, NULL, 0);
+    odt_u8 *b = m_alloc(&env, len);
+    struct snd_VoiceHeader vh, *v;
+    struct odt_TagItem t[6];
+    struct odt_opSet set;
+    for (i = 0; i < len; i++) b[i] = (odt_u8)((i * 37) & 0xff);
+    memset(&vh, 0, sizeof vh);
+    vh.vh_OneShotHiSamples = len;
+    vh.vh_SamplesPerSec = 11025;
+    vh.vh_Volume = 0x8000;
+    t[0].ti_Tag = SND_SDTA_Sample; t[0].ti_Data = (odt_u32)b;
+    t[1].ti_Tag = SND_SDTA_SampleLength; t[1].ti_Data = len;
+    t[2].ti_Tag = SND_SDTA_VoiceHeader; t[2].ti_Data = (odt_u32)&vh;
+    t[3].ti_Tag = SND_SDTA_Cycles; t[3].ti_Data = 1;
+    t[4].ti_Tag = SND_SDTA_SignalBitNumber; t[4].ti_Data = 12;
+    t[5].ti_Tag = ODT_TAG_DONE; t[5].ti_Data = 0;
+    set.MethodID = ODT_OM_SET; set.ops_AttrList = t; set.ops_GInfo = NULL;
+    m_do_method(&env, o, &set);
+    v = (void *)get(o, SND_SDTA_VoiceHeader);
+    printf("vh %lu %u %lu\n", (unsigned long)v->vh_OneShotHiSamples, v->vh_SamplesPerSec,
+           (unsigned long)v->vh_Volume);
+    printf("sps %lu period %lu vol %lu\n", (unsigned long)get(o, SND_SDTA_SamplesPerSec),
+           (unsigned long)get(o, SND_SDTA_Period), (unsigned long)get(o, SND_SDTA_Volume));
+    printf("trig %lu\n", (unsigned long)trig(o, ODT_STM_PLAY));
+    t[0].ti_Tag = SND_SDTA_SampleLength; t[0].ti_Data = 0;
+    t[1].ti_Tag = ODT_TAG_DONE;
+    m_do_method(&env, o, &set);
+    printf("cleared\n");
+    dispose(o);
+    printf("live %ld\n", live - base);
+}
+
 int main(int argc, char **argv)
 {
     char line[1024];
@@ -815,6 +853,7 @@ int main(int argc, char **argv)
         else if (!strcmp(a[0], "pixw")) cmd_pixw(a + 1);
         else if (!strcmp(a[0], "svx")) cmd_svx(a + 1);
         else if (!strcmp(a[0], "snd")) cmd_snd(a + 1);
+        else if (!strcmp(a[0], "sndvh")) cmd_sndvh(a + 1);
         fflush(stdout);
     }
     printf("end\n");

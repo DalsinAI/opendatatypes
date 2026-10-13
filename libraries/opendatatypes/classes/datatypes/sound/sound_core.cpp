@@ -142,7 +142,26 @@ u32 set_attrs(env_t *env, void *obj, snd_inst *p, odt_TagItem *tags)
             break;
         }
         case SND_SDTA_RightSample: set_free_sample(env, p, &p->right, reinterpret_cast<s8 *>(d)); break;
-        case SND_SDTA_SampleLength: p->length = d; update_replay(env, p); break;
+        case SND_SDTA_SampleLength:
+            /* 0 stops a sound that plays (the attribute's contract) */
+            if (!d)
+                stop(env, p);
+            p->length = d;
+            update_replay(env, p);
+            break;
+        case SND_SDTA_VoiceHeader:
+            /* the header copied; its rate and volume taken (tags after it win) */
+            if (d) {
+                const snd_VoiceHeader *v = reinterpret_cast<const snd_VoiceHeader *>(d);
+                p->vh = *v;
+                if (v->vh_SamplesPerSec) {
+                    p->samples_per_sec = v->vh_SamplesPerSec;
+                    p->period = period_of(env, v->vh_SamplesPerSec);
+                    update_replay(env, p);
+                }
+                p->volume = v->vh_Volume >= SND_UNITY ? 64 : v->vh_Volume * 64 / SND_UNITY;
+            }
+            break;
         case SND_SDTA_Period:
             p->period = d;
             p->samples_per_sec = d ? (clock_of(env) + d / 2) / d : 0;
@@ -284,8 +303,10 @@ void render(env_t *env, odt_IClass *cl, void *obj, snd_inst *p, odt_GadgetInfo *
     if (p->left && p->length) {
         u32 tp = pen(gi, DTC_TEXTPEN);
         for (s32 x = 0; x < W; x++) {
-            u32 s0 = static_cast<u32>(x) * p->length / static_cast<u32>(W);
-            u32 s1 = max<u32>(static_cast<u32>(x + 1) * p->length / static_cast<u32>(W), s0 + 1);
+            /* x * length / W without the product: length = q W + r */
+            u32 q = p->length / static_cast<u32>(W), r = p->length % static_cast<u32>(W);
+            u32 s0 = static_cast<u32>(x) * q + static_cast<u32>(x) * r / static_cast<u32>(W);
+            u32 s1 = max<u32>(static_cast<u32>(x + 1) * q + static_cast<u32>(x + 1) * r / static_cast<u32>(W), s0 + 1);
             s32 lo = 127, hi = -128;
             for (u32 i = s0; i < s1 && i < p->length; i++) {
                 s32 v = snd_sample8(p, 0, i);

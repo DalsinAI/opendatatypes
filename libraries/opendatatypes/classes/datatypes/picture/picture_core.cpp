@@ -127,6 +127,10 @@ bool ensure_pixels(env_t *env, pic_inst *p)
     w = min<u32>(w, p->srcbm->BytesPerRow * 8U);
     if (!w || !h)
         return false;
+    if (w > 0xffffUL || h > 0xffffUL) {
+        set_err(env, DTC_ERROR_NO_FREE_STORE); /* w * h would not fit */
+        return false;
+    }
     p->pixels = static_cast<u8 *>(env->alloc(env, w * h));
     if (!p->pixels) {
         set_err(env, DTC_ERROR_NO_FREE_STORE);
@@ -234,8 +238,11 @@ bool layout(env_t *env, odt_IClass *cl, void *obj, pic_inst *p, odt_GadgetInfo *
     if (remap && depth > 8 && !truecolour)
         depth = 8;                      /* PMODE_V42 on a deep screen: 8 planes of pens */
 
-    u32 n = dw * dh;
-    u8 *buf = static_cast<u8 *>(env->alloc(env, truecolour ? n * 4 : n));
+    /* sizes of a BitMap (16 bits each), so dw * dh fits; 4 bytes a pixel
+     * of a true colour picture checked before they are multiplied */
+    u32 n = dw <= 0xffffUL && dh <= 0xffffUL ? dw * dh : 0;
+    u8 *buf = n && (!truecolour || n <= 0x3fffffffUL)
+                  ? static_cast<u8 *>(env->alloc(env, truecolour ? n * 4 : n)) : nullptr;
     if (!buf || !x->alloc_bitmap) {
         env->free(env, buf);
         set_err(env, DTC_ERROR_NO_FREE_STORE);
@@ -343,14 +350,24 @@ bool layout(env_t *env, odt_IClass *cl, void *obj, pic_inst *p, odt_GadgetInfo *
         u32 rb = !friend_bm && p->destbm->Depth <= 8 && p->destbm->BytesPerRow >= pic_rowbytes(dw)
                      ? p->destbm->BytesPerRow : pic_rowbytes(dw);
         p->mask = static_cast<u8 *>(x->alloc_chip ? x->alloc_chip(env, rb * dh) : env->alloc(env, rb * dh));
-        if (p->mask)
-            for (u32 y = 0; y < dh; y++)
+        if (!p->mask) {
+            /* no mask: the transparent pixels would be drawn, so no layout */
+            free_dest(env, p);
+            set_err(env, DTC_ERROR_NO_FREE_STORE);
+            return false;
+        }
+        for (u32 y = 0; y < dh; y++)
                 for (u32 xx = 0; xx < dw; xx++)
                     if (opaque(p, (y * sh / dh) * sw + xx * sw / dw))
                         p->mask[y * rb + (xx >> 3)] |= static_cast<u8>(0x80 >> (xx & 7));
     }
     p->flags |= PIC_F_LAIDOUT;
     p->laid_screen = screen;
+    /* PDTA_FreeSourceBitMap: freed once the layout has the pixels from it */
+    if ((p->flags & PIC_F_FREESRC) && p->srcbm && p->pixels && x->free_bitmap) {
+        x->free_bitmap(env, p->srcbm);
+        p->srcbm = nullptr;
+    }
 
     odt_TagItem t[] = { { ODT_DTA_TotalHoriz, dw }, { ODT_DTA_TotalVert, dh }, { ODT_DTA_HorizUnit, 1 },
                         { ODT_DTA_VertUnit, 1 }, { ODT_TAG_DONE, 0 } };
@@ -494,7 +511,9 @@ u32 write_pixels(env_t *env, pic_inst *p, pic_pdtBlitPixelArray *m)
             return 0;                   /* the BitMapHeader comes first */
         p->store = (fmt == PIC_PBPAFMT_LUT8 || fmt == PIC_PBPAFMT_GREY8) && p->bmhd.bmh_Depth <= 8
                        ? PIC_STORE_LUT8 : PIC_STORE_ARGB;
-        p->pixels = static_cast<u8 *>(env->alloc(env, w * h * (p->store == PIC_STORE_ARGB ? 4 : 1)));
+        u32 bpp = p->store == PIC_STORE_ARGB ? 4 : 1;
+        /* w and h are the BitMapHeader's 16 bits: only the 4 can overflow */
+        p->pixels = w * h <= 0xffffffffUL / bpp ? static_cast<u8 *>(env->alloc(env, w * h * bpp)) : nullptr;
         if (!p->pixels) {
             p->store = PIC_STORE_NONE;
             set_err(env, DTC_ERROR_NO_FREE_STORE);
@@ -820,7 +839,7 @@ extern "C" odt_u32 pic_dispatch(const odt_cenv *env, odt_IClass *cl, void *obj, 
         if (!o)
             return 0;
         pic_inst *p = inst(cl, o);
-        p->flags = PIC_F_REMAP;
+        p->flags = PIC_F_REMAP | PIC_F_FRIEND; /* PDTA_UseFriendBitMap defaults to TRUE (V43 autodoc) */
         p->modeid = PIC_INVALID_ID;     /* ABI test: OS 3.2's ModeID before a subclass sets one */
         p->precision = PIC_PRECISION_IMAGE;
         p->destmode = PIC_PMODE_V42;    /* ABI test: OS 3.2's default PDTA_DestMode */
@@ -853,9 +872,22 @@ extern "C" odt_u32 pic_dispatch(const odt_cenv *env, odt_IClass *cl, void *obj, 
     case ODT_GM_RENDER:
         return render(env, cl, obj, inst(cl, obj), static_cast<odt_gpRender *>(msg));
     case ODT_DTM_OBTAINDRAWINFO: {
+        /* si_Lock held until DTM_RELEASEDRAWINFO: no layout (which takes it)
+         * replaces the destination while the program draws */
         pic_inst *p = inst(cl, obj);
+        odt_DTSpecialInfo *si = static_cast<odt_DTSpecialInfo *>(static_cast<odt_Gadget *>(obj)->SpecialInfo);
+        bool lock = si && env->sem_obtain && env->sem_release;
+        if (lock)
+            env->sem_obtain(env, &si->si_Lock);
         set_attrs(env, p, static_cast<odt_opSet *>(msg)->ops_AttrList);
-        return layout(env, cl, obj, p, nullptr) ? reinterpret_cast<u32>(obj) : 0;
+        if (!layout(env, cl, obj, p, nullptr)) {
+            if (lock)
+                env->sem_release(env, &si->si_Lock);
+            return 0;
+        }
+        if (lock)
+            p->draw_holds++;
+        return reinterpret_cast<u32>(obj);
     }
     case ODT_DTM_DRAW: {
         odt_dtDraw *d = static_cast<odt_dtDraw *>(msg);
@@ -866,8 +898,16 @@ extern "C" odt_u32 pic_dispatch(const odt_cenv *env, odt_IClass *cl, void *obj, 
              d->dtd_TopVert);
         return 1;
     }
-    case ODT_DTM_RELEASEDRAWINFO:
+    case ODT_DTM_RELEASEDRAWINFO: {
+        pic_inst *p = inst(cl, obj);
+        odt_DTSpecialInfo *si = static_cast<odt_DTSpecialInfo *>(static_cast<odt_Gadget *>(obj)->SpecialInfo);
+        /* only a handle ObtainDTDrawInfo gave, and only as often */
+        if (si && p->draw_holds && static_cast<odt_dtReleaseDrawInfo *>(msg)->dtr_Handle == obj) {
+            p->draw_holds--;
+            env->sem_release(env, &si->si_Lock);
+        }
         return 0;
+    }
     case ODT_DTM_FRAMEBOX:
         return frame_box(inst(cl, obj), static_cast<odt_dtFrameBox *>(msg));
     case ODT_DTM_WRITE: {
@@ -886,7 +926,8 @@ extern "C" odt_u32 pic_dispatch(const odt_cenv *env, odt_IClass *cl, void *obj, 
         pic_inst *p = inst(cl, obj);
         pic_pdtScale *s = static_cast<pic_pdtScale *>(msg);
         u32 w = s->ps_NewWidth, h = s->ps_NewHeight, sw = p->bmhd.bmh_Width, sh = p->bmhd.bmh_Height;
-        if (!w || !h || !sw || !sh)
+        /* a BitMap's sizes are 16 bits: larger would overflow the pixels' sizes */
+        if (!w || !h || !sw || !sh || w > 0xffffUL || h > 0xffffUL)
             return 0;
         if (s->ps_Flags & PIC_PScale_KeepAspect) {
             if (w * sh > h * sw)

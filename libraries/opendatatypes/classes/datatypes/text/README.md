@@ -37,6 +37,8 @@ python model `tests/m68k/opendatatypes_textanim_ref.py`.
 | Double click | Selects the word under the pointer, then the superclass's GM_GOACTIVE | measured |
 | Empty file | Opens, with no lines | ABI test |
 | Busy layout | GM_RENDER skips when the layout semaphore is held | measured |
+| No memory for TDTA_Buffer's copy | OM_NEW fails (ERROR_NO_FREE_STORE); OM_SET keeps the old text and sets IoErr | ours |
+| ascii: DTA_SourceSize near 4 GB | ERROR_NO_FREE_STORE (checked before it is added); no copy of the read text: no object | ours |
 
 ## Not yet
 

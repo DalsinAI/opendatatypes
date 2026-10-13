@@ -87,7 +87,9 @@ int main(void)
         return RETURN_FAIL;
     }
     DataTypesBase = OpenLibrary((CONST_STRPTR)"datatypes.library", 47);
-    if (!DataTypesBase || !contains((const char *)DataTypesBase->lib_IdString, "OpenDatatypes")) {
+    /* the private vector add_types calls is 47.100's */
+    if (!DataTypesBase || !contains((const char *)DataTypesBase->lib_IdString, "OpenDatatypes") ||
+        (DataTypesBase->lib_Version == 47 && DataTypesBase->lib_Revision < 100)) {
         PutStr((CONST_STRPTR)"AddDataTypes: this one needs OpenDatatypes' datatypes.library 47.100 or newer\n");
         goto out;
     }
@@ -105,7 +107,10 @@ int main(void)
                 ULONG l = 0;
                 if (ap->ap_Info.fib_DirEntryType > 0) continue;
                 while (ap->ap_Buf[l]) l++;
-                if (!(files[n] = AllocVec(l + 1, MEMF_ANY))) break;
+                if (!(files[n] = AllocVec(l + 1, MEMF_ANY))) {
+                    err = ERROR_NO_FREE_STORE;
+                    break;
+                }
                 CopyMem(ap->ap_Buf, files[n], l + 1);
                 n++;
             }
