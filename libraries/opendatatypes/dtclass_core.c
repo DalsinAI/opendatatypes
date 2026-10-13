@@ -129,16 +129,15 @@ static void notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo 
  * Its target may dispose the object from inside it, on this process; the
  * object can't go then (OM_NOTIFY's caller, ic's forwarding, still uses
  * it, and the class library is still on the stack), so the dispose waits
- * (pending) until the notification has unwound and the process finishes
- * it. Every process notifying has its own record, linked in the object
- * under si_Lock. */
-#define PN_DISPOSE   1                  /* OM_DISPOSE came: finish it from datatypesclass up */
-#define PN_DTDISPOSE 2                  /* DisposeDTObject came: the caller does all of it */
+ * (d->dispose_pending) until the object's last process has unwound its
+ * notification, and that process finishes it, once however many asked
+ * (proc_end). Every process notifying has its own record, linked in the
+ * object under si_Lock, so a dispose can tell it comes from inside. */
+#define PN_DISPOSE   1                  /* OM_DISPOSE came: the subclasses have had theirs */
+#define PN_DTDISPOSE 2                  /* DisposeDTObject came: the library's record goes too */
 struct proc_note {
     struct proc_note *next;
     void *task;
-    struct odt_IClass *cl;              /* OM_DISPOSE's class, for PN_DISPOSE */
-    int pending;
 };
 static void proc_notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo *gi,
                         const struct odt_TagItem *extra, int nextra, struct proc_note *pn)
@@ -146,8 +145,6 @@ static void proc_notify(const struct odt_cenv *env, void *obj, struct odt_Gadget
     struct odt_dtinst *d = ODT_DTINST(env, obj);
     struct proc_note **pp;
     pn->task = env->this_task ? env->this_task(env) : NULLP;
-    pn->cl = NULLP;
-    pn->pending = 0;
     env->sem_obtain(env, &d->si.si_Lock);
     pn->next = d->notifying;
     d->notifying = pn;
@@ -511,6 +508,9 @@ static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj
     env->sem_init(env, &d->si.si_Lock);
     env->sem_init(env, &d->proc_lock);
     d->notifying = NULLP;
+    d->procs = 0;
+    d->dispose_pending = 0;
+    d->dispose_cl = NULLP;
     d->si.si_VertUnit = d->si.si_HorizUnit = 1;
     d->source_type = ODT_DTST_FILE;
     g->SpecialInfo = &d->si;
@@ -547,11 +547,11 @@ static odt_u32 om_dispose(const struct odt_cenv *env, struct odt_IClass *cl, voi
 {
     struct odt_dtinst *d = ODT_INST_DATA(cl, obj);
     struct proc_note *pn = own_note(env, d);
-    if (pn) {                           /* from our own completion: later (proc_notify) */
-        if (!pn->pending) {
-            pn->pending = PN_DISPOSE;
-            pn->cl = cl;
-        }
+    if (pn) {                           /* from a completion notification: later (proc_end) */
+        env->sem_obtain(env, &d->si.si_Lock);
+        d->dispose_pending |= PN_DISPOSE;
+        d->dispose_cl = cl;
+        env->sem_release(env, &d->si.si_Lock);
         return 0;
     }
     end_procs(env, d);
@@ -906,23 +906,39 @@ static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpL
     return r;
 }
 
-/* A process's end, after its completion notification: proc_lock goes,
- * then a dispose that came from inside the notification is done (OM_DISPOSE
- * from datatypesclass up, the subclasses having had theirs), or left to
- * the caller (DisposeDTObject: *dispose set) */
-static void proc_end(const struct odt_cenv *env, void *obj, struct proc_note *pn, int *dispose)
+/* A process's end, after its completion notification: proc_lock goes.
+ * A dispose that came from inside a notification, this one's or another
+ * process's, is done by the object's last process, once: OM_DISPOSE from
+ * datatypesclass up (the subclasses having had theirs), and the library's
+ * record left to the caller (DisposeDTObject: *dispose). An earlier
+ * process asks the others to stop and leaves it. */
+static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
 {
     struct odt_dtinst *d = ODT_DTINST(env, obj);
+    struct odt_IClass *cl;
     odt_u32 m = ODT_OM_DISPOSE;
+    int what, last;
+    env->sem_obtain(env, &d->si.si_Lock);
+    if (d->dispose_pending && d->procs > 1) {
+        if (d->layout_proc && env->signal_stop) env->signal_stop(env, d->layout_proc);
+        stop_print(env, d);
+    }
+    last = d->procs <= 1;
+    if (d->procs) d->procs--;
+    what = last ? d->dispose_pending : 0;
+    cl = d->dispose_cl;
+    if (last) d->dispose_pending = 0;
+    env->sem_release(env, &d->si.si_Lock);
+    /* not the last: the object may go as soon as proc_lock does */
     env->sem_release(env, &d->proc_lock);
-    if (pn->pending == PN_DTDISPOSE) {
-        if (dispose) *dispose = 1;
-    } else if (pn->pending == PN_DISPOSE) {
+    if (what & PN_DISPOSE) {
         end_procs(env, d);
         close_source(env, d);
         free_strings(env, d);
-        env->do_super(env, pn->cl, obj, &m);
+        env->do_super(env, cl, obj, &m);
     }
+    if (dispose && (what & PN_DTDISPOSE))
+        *dispose = what & PN_DISPOSE ? ODT_DISPOSE_RECORD : ODT_DISPOSE_ALL;
 }
 
 /* The layout process's work, proc_lock held (odt_proc_hold) until after
@@ -931,24 +947,27 @@ odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayou
 {
     struct proc_note pn;
     odt_u32 r;
-    pn.pending = 0;
     if (dispose) *dispose = 0;
     r = layout_body(env, obj, gpl, &pn);
-    proc_end(env, obj, &pn, dispose);
+    proc_end(env, obj, dispose);
     return r;
 }
 
 /* DisposeDTObject on a process inside its completion notification: the
- * dispose waits for the notification to unwind, and the process's caller
- * (odt_layout_run's or odt_print_run's *dispose) does it then. 1 when
- * so. */
+ * dispose waits for the object's last process to end, and that process's
+ * caller (odt_layout_run's or odt_print_run's *dispose) does it then. 1
+ * when so. */
 int odt_dispose_later(const struct odt_cenv *env, void *obj)
 {
+    struct odt_dtinst *d;
     struct proc_note *pn;
     if (!obj) return 0;
-    pn = own_note(env, ODT_DTINST(env, obj));
+    d = ODT_DTINST(env, obj);
+    pn = own_note(env, d);
     if (!pn) return 0;
-    pn->pending = PN_DTDISPOSE;
+    env->sem_obtain(env, &d->si.si_Lock);
+    d->dispose_pending |= PN_DTDISPOSE;
+    env->sem_release(env, &d->si.si_Lock);
     return 1;
 }
 
@@ -968,6 +987,7 @@ odt_u32 odt_do_async_layout(const struct odt_cenv *env, void *obj, struct odt_gp
     env->sem_obtain(env, &d->si.si_Lock);
     d->si.si_Flags |= ODT_DTSIF_LAYOUTPROC;
     if (env->start_process && (d->layout_proc = env->start_process(env, 0, obj, NULLP, NULLP, gpl)) != NULLP) {
+        d->procs++;                     /* before it can end: it needs si_Lock first */
         env->sem_release(env, &d->si.si_Lock);
         return 1;
     }
@@ -1003,7 +1023,7 @@ odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint 
     proc_notify(env, obj, msg->dtp_GInfo, t, 1, &pn);
     d->printer_proc = NULLP;
     d->si.si_Flags &= ~ODT_DTSIF_PRINTING;
-    proc_end(env, obj, &pn, dispose);
+    proc_end(env, obj, dispose);
     return r;
 }
 
@@ -1017,6 +1037,7 @@ odt_u32 odt_print_object(const struct odt_cenv *env, void *obj, void *win, void 
     env->sem_obtain(env, &d->si.si_Lock);
     d->si.si_Flags |= ODT_DTSIF_PRINTING;
     if (env->start_process && (d->printer_proc = env->start_process(env, 1, obj, win, req, msg)) != NULLP) {
+        d->procs++;                     /* before it can end: it needs si_Lock first */
         env->sem_release(env, &d->si.si_Lock);
         return 1;
     }

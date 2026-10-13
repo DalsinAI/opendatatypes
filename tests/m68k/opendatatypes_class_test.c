@@ -131,7 +131,7 @@ static void put_tag(odt_u32 tag, odt_u32 v)
 
 /* What the logger does when a process tells it it's done (DTA_Sync or
  * DTA_PrinterStatus), from that process (selftest) */
-enum { DONE_NOTHING, DONE_DISPOSE, DONE_DTDISPOSE, DONE_RELAYOUT };
+enum { DONE_NOTHING, DONE_DISPOSE, DONE_DTDISPOSE, DONE_RELAYOUT, DONE_OVERLAP, DONE_DTOVERLAP, DONE_MIXOVERLAP };
 static int on_done, in_notify, cur = -1, sem_depth;
 static void *done_obj;
 static void done_action(void);
@@ -335,6 +335,7 @@ static int e_check_stop(const struct odt_cenv *e) { (void)e; return cur >= 0 ? p
 static char tasks[17];                  /* the program, then each process */
 static void *e_this_task(const struct odt_cenv *e) { (void)e; return &tasks[cur + 1]; }
 static void dt_dispose(void *o);
+static int classlibs;
 static void run_one(int i)
 {
     int was = cur, dispose = 0;
@@ -343,7 +344,9 @@ static void run_one(int i)
     if (pend[i].printing) odt_print_run(&cenv, pend[i].obj, &pend[i].pr, &dispose);
     else odt_layout_run(&cenv, pend[i].obj, &pend[i].gpl, &dispose);
     pend[i].live = 0;
-    if (dispose) dt_dispose(pend[i].obj);   /* the library's process, as proc_entry */
+    /* the library's process, as proc_entry */
+    if (dispose == ODT_DISPOSE_ALL) dt_dispose(pend[i].obj);
+    else if (dispose == ODT_DISPOSE_RECORD) classlibs--;
     cur = was;
 }
 static void run_procs(void)
@@ -439,7 +442,6 @@ static void set_tops(odt_u32 method, long tv, long th)
  * completion notification it waits (odt_dispose_later), and the process
  * does it once the notification has unwound (run_one); the class library
  * is closed only then */
-static int classlibs;
 static void dt_dispose(void *o)
 {
     if (odt_dispose_later(&cenv, o)) return;
@@ -461,6 +463,23 @@ static void done_action(void)
         odt_do_async_layout(&cenv, o, &l);
         run_one(n);
         what = DONE_DISPOSE;
+    } else if (what >= DONE_OVERLAP) {
+        /* a print from the completion, whose own completion disposes the
+         * object while this one is still in its: both dispose, the object
+         * goes once, after the last has unwound. The two processes run at
+         * once, both past ic's loop check (here, nested, the loop count
+         * would stop the print's) */
+        struct odt_dtPrint m = { ODT_DTM_PRINT, NULL, NULL, NULL };
+        odt_u32 loop[2] = { OI_ICM_CLEARLOOP, OI_ICM_SETLOOP };
+        int n = npend;
+        odt_print_object(&cenv, o, NULL, NULL, &m);
+        on_done = what == DONE_OVERLAP ? DONE_DISPOSE : DONE_DTDISPOSE;
+        done_obj = o;
+        oi_DoMethodA(&oenv, o, &loop[0]);
+        run_one(n);
+        oi_DoMethodA(&oenv, o, &loop[1]);
+        on_done = DONE_NOTHING;
+        what = what == DONE_DTOVERLAP ? DONE_DTDISPOSE : DONE_DISPOSE;
     }
     done_obj = NULL;
     if (what == DONE_DISPOSE) oi_DisposeObject(&oenv, o);
@@ -490,7 +509,9 @@ static void selftest(const char *name)
     if (o) {
         classlibs = 1;
         done_obj = o;
-        on_done = !strcmp(name, "dtdispose") ? DONE_DTDISPOSE : !strcmp(name, "relayout") ? DONE_RELAYOUT : DONE_DISPOSE;
+        on_done = !strcmp(name, "dtdispose") ? DONE_DTDISPOSE : !strcmp(name, "relayout") ? DONE_RELAYOUT :
+                  !strcmp(name, "overlap") ? DONE_OVERLAP : !strcmp(name, "dtoverlap") ? DONE_DTOVERLAP :
+                  !strcmp(name, "mixoverlap") ? DONE_MIXOVERLAP : DONE_DISPOSE;
         if (!strcmp(name, "print")) {
             struct odt_dtPrint m = { ODT_DTM_PRINT, NULL, NULL, NULL };
             odt_print_object(&cenv, o, NULL, NULL, &m);
@@ -499,7 +520,7 @@ static void selftest(const char *name)
             odt_do_async_layout(&cenv, o, &l);
         }
         run_procs();
-        if (strcmp(name, "dtdispose")) classlibs = 0;
+        if (strcmp(name, "dtdispose") && strcmp(name, "dtoverlap") && strcmp(name, "mixoverlap")) classlibs = 0;
     }
     quarantine_check();
     fflush(stdout);

@@ -909,7 +909,7 @@ struct startup {
     struct dtPrint pr;
 };
 
-static void dispose_dt(struct ODBase *base, Object *o);
+static void dispose_dt(struct ODBase *base, Object *o, int object);
 
 static void proc_entry(void)
 {
@@ -922,9 +922,10 @@ static void proc_entry(void)
     Signal(s->parent, SIGF_SINGLE);
     if (s->printing) odt_print_run(s->env, s->obj, (struct odt_dtPrint *)&s->pr, &dispose);
     else odt_layout_run(s->env, s->obj, (struct odt_gpLayout *)&s->gpl, &dispose);
-    /* DisposeDTObject from inside the completion notification: done now
-     * it has unwound (odt_dispose_later) */
-    if (dispose) dispose_dt(the_base, s->obj);
+    /* DisposeDTObject from inside a completion notification: done now
+     * the object's last process has unwound (odt_dispose_later); after an
+     * OM_DISPOSE as well, only the record is left */
+    if (dispose) dispose_dt(the_base, s->obj, dispose == ODT_DISPOSE_ALL);
     FreeVec(s);
 }
 
@@ -1238,10 +1239,11 @@ static Object *L_NewDTObjectA(REG(d0, APTR name), REG(a0, struct TagItem *attrs)
     return o;
 }
 
-static void dispose_dt(struct ODBase *base, Object *o)
+/* The object (when object) and the library's record of it */
+static void dispose_dt(struct ODBase *base, Object *o, int object)
 {
     struct objrec *r = find_obj(base, o, 1);
-    DisposeObject(o);
+    if (object) DisposeObject(o);
     if (r) {
         CloseLibrary(r->classlib);
         if (r->dt) L_ReleaseDataType(r->dt, base);
@@ -1255,7 +1257,7 @@ static void dispose_dt(struct ODBase *base, Object *o)
 static void L_DisposeDTObject(REG(a0, Object *o), REG(a6, struct ODBase *base))
 {
     if (!o || odt_dispose_later(&cenv, o)) return;
-    dispose_dt(base, o);
+    dispose_dt(base, o, 1);
 }
 
 static ULONG L_SetDTAttrsA(REG(a0, Object *o), REG(a1, struct Window *win), REG(a2, struct Requester *req),

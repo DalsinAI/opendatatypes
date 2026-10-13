@@ -549,7 +549,10 @@ struct odt_dtinst {
     struct odt_SignalSemaphore proc_lock; /* held shared by the layout and print processes */
     odt_u32 lock;                       /* DTA_Handle's file lock (DTST_FILE): the object's, UnLocked with it */
     void *notifying;                    /* the processes inside their completion notification */
-    odt_u32 reserved[3];
+    odt_u16 procs;                      /* layout and print processes started and not yet ended */
+    odt_u16 dispose_pending;            /* a dispose from inside a completion notification (dtclass_core.c) */
+    struct odt_IClass *dispose_cl;      /* its OM_DISPOSE's class */
+    odt_u32 reserved[1];
 };
 #define ODT_DTF_BUSY      0x0001        /* DTA_Busy */
 #define ODT_DTF_SYNC      0x0002        /* DTA_Sync: laid out and current */
@@ -573,8 +576,12 @@ odt_u32 odt_dtclass_inst_size(void);
  * under si_Lock, then the notification; and a printing process's
  * DTM_PRINT (PrintDTObjectA). Each answers the method's result. */
 /* the process's work; *dispose (may be NULL) is set when DisposeDTObject
- * came from inside its completion notification (odt_dispose_later), for
- * the caller to do now */
+ * came from inside a completion notification (odt_dispose_later) and this
+ * is the object's last process, for the caller to do now: all of it
+ * (ODT_DISPOSE_ALL), or only the library's record when OM_DISPOSE came
+ * too and the object has gone already (ODT_DISPOSE_RECORD) */
+#define ODT_DISPOSE_ALL    1
+#define ODT_DISPOSE_RECORD 2
 odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl, int *dispose);
 void odt_proc_hold(const struct odt_cenv *env, void *obj);
 odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint *msg, int *dispose);

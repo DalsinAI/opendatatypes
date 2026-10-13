@@ -409,8 +409,10 @@ def main():
         m.dispose()
 
     # the completion's target disposes the object, from the process itself:
-    # the dispose waits for the notification to unwind (selftest)
-    for name in ("dispose", "print", "dtdispose", "relayout"):
+    # the dispose waits for the notification to unwind (selftest); and with
+    # a print from the completion whose own completion disposes it too, the
+    # object goes once, after the last process has unwound (*overlap)
+    for name in ("dispose", "print", "dtdispose", "relayout", "overlap", "dtoverlap", "mixoverlap"):
         cmd("selftest %s" % name)
         m.p("selftest %s ok" % name)
 
