@@ -1256,7 +1256,7 @@ static void dispose_dt(struct ODBase *base, Object *o, int object)
  * the process disposes it then (proc_entry) */
 static void L_DisposeDTObject(REG(a0, Object *o), REG(a6, struct ODBase *base))
 {
-    if (!o || odt_dispose_later(&cenv, o)) return;
+    if (!o || (ours(base, o) && odt_dispose_later(&cenv, o))) return;
     dispose_dt(base, o, 1);
 }
 

@@ -135,6 +135,7 @@ static void notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo 
  * object under si_Lock, so a dispose can tell it comes from inside. */
 #define PN_DISPOSE   1                  /* OM_DISPOSE came: the subclasses have had theirs */
 #define PN_DTDISPOSE 2                  /* DisposeDTObject came: the library's record goes too */
+#define PN_TAKEN     4                  /* the last process is disposing it */
 struct proc_note {
     struct proc_note *next;
     void *task;
@@ -927,7 +928,8 @@ static void proc_end(const struct odt_cenv *env, void *obj, int *dispose)
     if (d->procs) d->procs--;
     what = last ? d->dispose_pending : 0;
     cl = d->dispose_cl;
-    if (last) d->dispose_pending = 0;
+    /* a DisposeDTObject from elsewhere from now on joins this one */
+    if (what) d->dispose_pending = PN_TAKEN;
     env->sem_release(env, &d->si.si_Lock);
     /* not the last: the object may go as soon as proc_lock does */
     env->sem_release(env, &d->proc_lock);
@@ -955,20 +957,22 @@ odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayou
 
 /* DisposeDTObject on a process inside its completion notification: the
  * dispose waits for the object's last process to end, and that process's
- * caller (odt_layout_run's or odt_print_run's *dispose) does it then. 1
- * when so. */
+ * caller (odt_layout_run's or odt_print_run's *dispose) does it then. One
+ * from any task while such a dispose is waiting or under way joins it:
+ * the object has one disposer. 1 when so. */
 int odt_dispose_later(const struct odt_cenv *env, void *obj)
 {
     struct odt_dtinst *d;
     struct proc_note *pn;
+    int later;
     if (!obj) return 0;
     d = ODT_DTINST(env, obj);
     pn = own_note(env, d);
-    if (!pn) return 0;
     env->sem_obtain(env, &d->si.si_Lock);
-    d->dispose_pending |= PN_DTDISPOSE;
+    later = pn || d->dispose_pending;
+    if (later && !(d->dispose_pending & PN_TAKEN)) d->dispose_pending |= PN_DTDISPOSE;
     env->sem_release(env, &d->si.si_Lock);
-    return 1;
+    return later;
 }
 
 /* DoAsyncLayout: one layout at a time; a new one stops the old first */
