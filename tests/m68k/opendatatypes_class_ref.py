@@ -96,8 +96,9 @@ class Model:
             self.p("iffdos 7 0")
         if kind == "clip":
             self.p("iffclip 0 0")
-        h = {"file": "7", "iff": "iff", "clip": "iff", "ram": "0", "mem": "0"}[kind]
-        st = {"file": 2, "iff": 2, "clip": 3, "ram": 1, "mem": 5}[kind]
+        # cliph: the program's IFFHandle (DTA_Handle), used as it is
+        h = {"file": "7", "iff": "iff", "clip": "iff", "cliph": "iff", "ram": "0", "mem": "0"}[kind]
+        st = {"file": 2, "iff": 2, "clip": 3, "cliph": 3, "ram": 1, "mem": 5}[kind]
         self.p("new ok 2 h=%s st=%d" % (h, st))
         self.o = Obj(kind, totv, toth, nosel)
 
@@ -263,7 +264,9 @@ class Model:
         if o.kind == "mem":
             self.p("write 9 300 %02x..%02x" % (MEM[0], MEM[-1]))
             self.p("written 1")
-        elif o.kind == "file":
+        elif o.kind in ("file", "iff"):
+            # the file's bytes from the start, the position put back
+            self.p("seek 7 0 -1")
             self.p("seek 7 0 -1")
             self.p("written 1")
         else:
@@ -288,7 +291,7 @@ def main():
     def cmd(s):
         lines.append(s)
 
-    kinds = ["file", "iff", "ram", "mem", "clip", "failfile"]
+    kinds = ["file", "iff", "ram", "mem", "clip", "failfile", "cliph"]
     for n in range(40):
         kind = kinds[n % len(kinds)] if n < len(kinds) else rnd.choice(kinds)
         totv, toth = rnd.choice([0, 5, 50, 300, 1000]), rnd.choice([0, 7, 80, 640, 2000])

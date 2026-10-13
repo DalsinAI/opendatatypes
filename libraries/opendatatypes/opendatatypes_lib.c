@@ -960,6 +960,7 @@ static void ce_signal_stop(const struct odt_cenv *e, void *proc) { Signal(proc, 
 static int ce_check_stop(const struct odt_cenv *e) { return (SetSignal(0, 0) & SIGBREAKF_CTRL_C) != 0; }
 
 static const char *ce_dt_string(const struct odt_cenv *e, odt_u32 id);
+static void ce_unlock(const struct odt_cenv *e, odt_u32 lock) { (void)e; UnLock((BPTR)lock); }
 
 static struct odt_cenv cenv = {
     NULL, NULL,
@@ -973,7 +974,8 @@ static struct odt_cenv cenv = {
     ce_obtain_rp, ce_release_rp, ce_complement_box,
     ce_start_process, ce_signal_stop, ce_check_stop,
     ce_dt_string,
-    NULL
+    NULL,
+    ce_unlock
 };
 
 /* datatypesclass's dispatcher, as Intuition calls a class's hook */
@@ -1140,10 +1142,13 @@ static Object *L_NewDTObjectA(REG(d0, APTR name), REG(a0, struct TagItem *attrs)
             break;
         }
         case DTST_CLIPBOARD: {
+            /* DTA_Handle: the program's IFFHandle on the clipboard
+             * instead of the unit in name (the autodoc) */
+            struct IFFHandle *h = (struct IFFHandle *)GetTagData(DTA_Handle, 0, attrs);
             struct odt_entry *e;
             ObtainSemaphore(&base->lock);
             load(base);
-            if ((e = recognize_clip(base, (ULONG)name)) != NULL) e->uses++;
+            if ((e = h ? recognize_iff(base, h) : recognize_clip(base, (ULONG)name)) != NULL) e->uses++;
             ReleaseSemaphore(&base->lock);
             dt = e ? (struct DataType *)&e->dt : NULL;
             break;
@@ -1233,8 +1238,15 @@ static ULONG L_SetDTAttrsA(REG(a0, Object *o), REG(a1, struct Window *win), REG(
                            REG(a3, struct TagItem *attrs))
 {
     struct opSet m;
+    ULONG r;
     if (!o) return 0;
-    if (win) return SetGadgetAttrsA((struct Gadget *)o, win, req, attrs);
+    if (win) {
+        /* attached: what changed is drawn (the class says so with a
+         * nonzero answer) */
+        r = SetGadgetAttrsA((struct Gadget *)o, win, req, attrs);
+        if (r) RefreshGList((struct Gadget *)o, win, req, 1);
+        return r;
+    }
     m.MethodID = OM_SET;
     m.ops_AttrList = attrs;
     m.ops_GInfo = NULL;
@@ -1249,9 +1261,22 @@ static ULONG L_GetDTAttrsA(REG(a0, Object *o), REG(a2, struct TagItem *attrs))
 static LONG L_AddDTObject(REG(a0, struct Window *win), REG(a1, struct Requester *req), REG(a2, Object *o),
                           REG(d0, LONG pos), REG(a6, struct ODBase *base))
 {
+    LONG r;
+    struct gpLayout gpl;
     if (!win || !o) return -1;
     if (ours(base, o)) ODT_DTINST(&cenv, o)->flags |= ODT_DTF_ADDED;
-    return (LONG)AddGList(win, (struct Gadget *)o, pos, 1, req);
+    r = (LONG)AddGList(win, (struct Gadget *)o, pos, 1, req);
+    /* the autodoc: the object gets GM_LAYOUT with gpl_Initial 1. Intuition
+     * sends that itself to a gadget with relative size or GFLG_RELSPECIAL;
+     * an absolute one gets it here. */
+    if (!(((struct Gadget *)o)->Flags & (GFLG_RELBOTTOM | GFLG_RELRIGHT | GFLG_RELWIDTH | GFLG_RELHEIGHT |
+                                          GFLG_RELSPECIAL))) {
+        gpl.MethodID = GM_LAYOUT;
+        gpl.gpl_GInfo = NULL;
+        gpl.gpl_Initial = 1;
+        DoGadgetMethodA((struct Gadget *)o, win, req, (Msg)&gpl);
+    }
+    return r;
 }
 
 static void L_RefreshDTObjectA(REG(a0, Object *o), REG(a1, struct Window *win), REG(a2, struct Requester *req),

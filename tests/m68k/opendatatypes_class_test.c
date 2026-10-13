@@ -371,13 +371,15 @@ int main(int argc, char **argv)
             odt_u32 st = ODT_DTST_FILE;
             struct odt_DataType *dt = &dt_bin;
             odt_u32 name = (odt_u32)"data";
-            struct odt_TagItem t[12];
+            struct odt_TagItem t[13];
             int i = 0;
             fail_open = !strcmp(k, "failfile");
             if (!strcmp(k, "iff")) dt = &dt_iff;
             else if (!strcmp(k, "ram")) { st = ODT_DTST_RAM; name = 0; }
             else if (!strcmp(k, "mem")) { st = ODT_DTST_MEMORY; name = 0; }
-            else if (!strcmp(k, "clip")) { st = ODT_DTST_CLIPBOARD; name = 0; dt = &dt_iff; }
+            else if (!strcmp(k, "clip") || !strcmp(k, "cliph")) { st = ODT_DTST_CLIPBOARD; name = 0; dt = &dt_iff; }
+            /* cliph: the program's own IFFHandle as DTA_Handle */
+            t[i].ti_Tag = !strcmp(k, "cliph") ? ODT_DTA_Handle : ODT_TAG_IGNORE; t[i++].ti_Data = (odt_u32)iff_obj;
             t[i].ti_Tag = ODT_DTA_Name; t[i++].ti_Data = name;
             t[i].ti_Tag = ODT_DTA_SourceType; t[i++].ti_Data = st;
             t[i].ti_Tag = ODT_DTA_DataType; t[i++].ti_Data = (odt_u32)dt;
@@ -391,7 +393,7 @@ int main(int argc, char **argv)
             t[i].ti_Tag = PROBE_TotH; t[i++].ti_Data = (odt_u32)atol(w[3]);
             t[i].ti_Tag = n > 4 ? PROBE_NoSel : ODT_TAG_IGNORE; t[i++].ti_Data = 1;
             {
-                struct odt_TagItem all[13];
+                struct odt_TagItem all[14];
                 memcpy(all, t, sizeof(struct odt_TagItem) * (size_t)i);
                 all[i].ti_Tag = ODT_TAG_DONE; all[i].ti_Data = 0;
                 ioerr = 0;

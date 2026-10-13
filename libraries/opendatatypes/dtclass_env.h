@@ -489,6 +489,9 @@ struct odt_cenv {
     /* A class's own services (picture.datatype's graphics, sound's audio,
      * text's fonts): each class family defines the struct it points at */
     void *class_ext;
+
+    /* UnLock, for DTA_Handle's file lock the object takes over; optional */
+    void (*unlock)(const struct odt_cenv *env, odt_u32 lock);
 };
 
 /* ---- datatypesclass's instance (private to datatypesclass and the library) ---- */
@@ -497,6 +500,7 @@ struct odt_cenv {
 #define ODT_HANDLE_NONE 0               /* DTST_RAM, or nothing opened */
 #define ODT_HANDLE_FILE 1               /* a DOS file handle (a non-IFF type's file) */
 #define ODT_HANDLE_IFF  2               /* an IFFHandle on a file, the clipboard or memory */
+#define ODT_HANDLE_GIVEN 3              /* the program's own IFFHandle (DTA_Handle, DTST_CLIPBOARD): not ours to close */
 
 struct odt_dtinst {
     struct odt_DTSpecialInfo si;        /* G(o)->SpecialInfo */
@@ -536,6 +540,8 @@ struct odt_dtinst {
     /* what the library keeps with an object */
     void *window, *requester;           /* AddDTObject's */
     void *class_library;                /* the class library NewDTObjectA opened for it */
+    struct odt_SignalSemaphore print_lock; /* held by the print process while it runs */
+    odt_u32 lock;                       /* DTA_Handle's file lock (DTST_FILE): the object's, UnLocked with it */
     odt_u32 reserved[4];
 };
 #define ODT_DTF_BUSY      0x0001        /* DTA_Busy */
