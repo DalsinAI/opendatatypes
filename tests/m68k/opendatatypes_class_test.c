@@ -178,28 +178,36 @@ static void e_dispose(const struct odt_cenv *e, void *obj) { (void)e; oi_Dispose
 static void *e_alloc(const struct odt_cenv *e, odt_u32 n) { (void)e; live++; return calloc(1, n); }
 static void e_free(const struct odt_cenv *e, void *p) { (void)e; if (p) { live--; free(p); } }
 
-/* semaphores: a count each, which must balance, and who holds it
- * (opaque[1]: 1 the program, 2 + n started process n); one another holds
- * is waited for: that process runs to its end first */
+/* semaphores: a count each, which must balance, and each holder's count
+ * (opaque[2 + h]: h 0 the program, 1 + n started process n), opaque[1]
+ * set while one holds it exclusively. One another holds (exclusively, for
+ * a shared request) is waited for: the process holding it runs to its end
+ * first */
 static int sem_depth;
 static int cur = -1;
 static void run_one(int i);
-static void e_sem_init(const struct odt_cenv *e, struct odt_SignalSemaphore *s) { (void)e; memset(s, 0, sizeof *s); }
-static void e_sem_obtain(const struct odt_cenv *e, struct odt_SignalSemaphore *s)
+#define SEM_HOLDERS 17
+static void sem_take(struct odt_SignalSemaphore *s, int shared)
 {
-    (void)e;
-    if (s->opaque[0] && s->opaque[1] != cur + 2) {
-        if (s->opaque[1] >= 2) run_one(s->opaque[1] - 2);
-        if (s->opaque[0]) printf("FAIL a semaphore another holds\n");
-    }
+    int h;
+    for (h = 0; h < SEM_HOLDERS; h++)
+        if (h != cur + 1 && s->opaque[2 + h] && (!shared || s->opaque[1])) {
+            if (h) run_one(h - 1);
+            if (s->opaque[2 + h]) printf("FAIL a semaphore another holds\n");
+        }
     s->opaque[0]++;
-    s->opaque[1] = (odt_u8)(cur + 2);
+    s->opaque[2 + cur + 1]++;
+    if (!shared) s->opaque[1] = 1;
     sem_depth++;
 }
+static void e_sem_init(const struct odt_cenv *e, struct odt_SignalSemaphore *s) { (void)e; memset(s, 0, sizeof *s); }
+static void e_sem_obtain(const struct odt_cenv *e, struct odt_SignalSemaphore *s) { (void)e; sem_take(s, 0); }
+static void e_sem_shared(const struct odt_cenv *e, struct odt_SignalSemaphore *s) { (void)e; sem_take(s, 1); }
 static void e_sem_release(const struct odt_cenv *e, struct odt_SignalSemaphore *s)
 {
     (void)e;
-    if (!s->opaque[0]) printf("FAIL release of a semaphore not held\n");
+    if (!s->opaque[0] || !s->opaque[2 + cur + 1]) printf("FAIL release of a semaphore not held\n");
+    s->opaque[2 + cur + 1]--;
     if (!--s->opaque[0]) s->opaque[1] = 0;
     sem_depth--;
 }
@@ -255,10 +263,10 @@ static void *e_start(const struct odt_cenv *e, int printing, void *o, void *win,
     if (printing) p->pr = *(struct odt_dtPrint *)msg;
     else p->gpl = *(struct odt_gpLayout *)msg;
     printf("start %d %s\n", npend, printing ? "print" : "layout");
-    if (printing) {                     /* its first step, before we answer */
+    {                                   /* its first step, before we answer */
         int was = cur;
         cur = npend;
-        odt_print_hold(&cenv, o);
+        odt_proc_hold(&cenv, o);
         cur = was;
     }
     return &pend[npend++];
@@ -298,7 +306,7 @@ static void env_init(void)
     cenv.free = e_free;
     cenv.sem_init = e_sem_init;
     cenv.sem_obtain = e_sem_obtain;
-    cenv.sem_obtain_shared = e_sem_obtain;
+    cenv.sem_obtain_shared = e_sem_shared;
     cenv.sem_release = e_sem_release;
     cenv.io_err = e_io_err;
     cenv.set_io_err = e_set_io_err;
@@ -501,7 +509,12 @@ int main(int argc, char **argv)
             struct odt_dtPrint m = { ODT_DTM_PRINT, NULL, NULL, NULL };
             printf("print %lu\n", (unsigned long)odt_print_object(&cenv, obj, NULL, NULL, &m));
         } else if (!strcmp(w[0], "dispose")) {
-            oi_DisposeObject(&oenv, obj);
+            {
+                int i;
+                oi_DisposeObject(&oenv, obj);
+                for (i = 0; i < npend; i++)
+                    if (pend[i].live && pend[i].obj == obj) printf("FAIL process %d outlives its object\n", i);
+            }
             obj = NULL;
             active = 0;
             printf("dispose %ld %d\n", live - base, sem_depth);

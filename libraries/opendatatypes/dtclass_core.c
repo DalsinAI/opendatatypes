@@ -434,15 +434,16 @@ static void stop_print(const struct odt_cenv *env, struct odt_dtinst *d)
     if (d->printer_proc && env->signal_stop) env->signal_stop(env, d->printer_proc);
 }
 
-/* Disposal: asks a running print to stop, then waits for it to end. The
- * print process holds print_lock from before PrintDTObjectA returns
- * (odt_print_hold) to its last touch of the object, so taking the lock,
- * always, waits out a print however far it has got. */
-static void end_print(const struct odt_cenv *env, struct odt_dtinst *d)
+/* Disposal: asks a running print and layout to stop, then waits for them
+ * to end. Each process holds proc_lock, shared, from before the call that
+ * started it returns (odt_proc_hold) to its last touch of the object, so
+ * taking it, always, waits out a process however far it has got. */
+static void end_procs(const struct odt_cenv *env, struct odt_dtinst *d)
 {
     stop_print(env, d);
-    env->sem_obtain(env, &d->print_lock);
-    env->sem_release(env, &d->print_lock);
+    stop_layout(env, d);
+    env->sem_obtain(env, &d->proc_lock);
+    env->sem_release(env, &d->proc_lock);
 }
 
 static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj, struct odt_opSet *m)
@@ -457,7 +458,7 @@ static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj
     g = o;
     d = ODT_INST_DATA(cl, o);
     env->sem_init(env, &d->si.si_Lock);
-    env->sem_init(env, &d->print_lock);
+    env->sem_init(env, &d->proc_lock);
     d->si.si_VertUnit = d->si.si_HorizUnit = 1;
     d->source_type = ODT_DTST_FILE;
     g->SpecialInfo = &d->si;
@@ -493,8 +494,7 @@ static void *om_new(const struct odt_cenv *env, struct odt_IClass *cl, void *obj
 static odt_u32 om_dispose(const struct odt_cenv *env, struct odt_IClass *cl, void *obj, void *m)
 {
     struct odt_dtinst *d = ODT_INST_DATA(cl, obj);
-    end_print(env, d);
-    stop_layout(env, d);
+    end_procs(env, d);
     close_source(env, d);
     free_strings(env, d);
     return env->do_super(env, cl, obj, m);
@@ -844,9 +844,14 @@ static odt_u32 layout_body(const struct odt_cenv *env, void *obj, struct odt_gpL
     return r;
 }
 
+/* The layout process's work, proc_lock held (odt_proc_hold) until after
+ * its last touch of the object (the notification) */
 odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl)
 {
-    return layout_body(env, obj, gpl, 1);
+    struct odt_dtinst *d = ODT_DTINST(env, obj);
+    odt_u32 r = layout_body(env, obj, gpl, 1);
+    env->sem_release(env, &d->proc_lock);
+    return r;
 }
 
 /* DoAsyncLayout: one layout at a time; a new one stops the old first */
@@ -874,14 +879,15 @@ odt_u32 odt_do_async_layout(const struct odt_cenv *env, void *obj, struct odt_gp
     return 1;
 }
 
-/* The print process's first step, before start_process answers: it holds
- * print_lock until odt_print_run's end, so OM_DISPOSE waits for it */
-void odt_print_hold(const struct odt_cenv *env, void *obj)
+/* A layout or print process's first step, before start_process answers:
+ * it holds proc_lock (shared: a print and a layout may both run) until its
+ * work's end, so OM_DISPOSE waits for it */
+void odt_proc_hold(const struct odt_cenv *env, void *obj)
 {
-    env->sem_obtain(env, &ODT_DTINST(env, obj)->print_lock);
+    env->sem_obtain_shared(env, &ODT_DTINST(env, obj)->proc_lock);
 }
 
-/* The print process's work, print_lock held (odt_print_hold). Printing
+/* The print process's work, proc_lock held (odt_proc_hold). Printing
  * shows (DTA_PrinterProc, PrintDTObjectA refusing another) until the last
  * touch of the object but the lock's release. */
 odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint *msg)
@@ -897,7 +903,7 @@ odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint 
     notify(env, obj, msg->dtp_GInfo, 0, t, 1);
     d->printer_proc = NULLP;
     d->si.si_Flags &= ~ODT_DTSIF_PRINTING;
-    env->sem_release(env, &d->print_lock);
+    env->sem_release(env, &d->proc_lock);
     return r;
 }
 
