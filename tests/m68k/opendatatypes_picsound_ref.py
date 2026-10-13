@@ -111,10 +111,12 @@ def make_raw(spec, rng):
 
 
 def write_ilbm(spec, rng):
-    raw, vals = make_raw(spec, rng)
     w, h, d = spec["w"], spec["h"], spec["depth"]
     cmp = spec.get("cmp", 1)
-    if cmp == 1:
+    if spec.get("body") is not None:
+        body = spec["body"]                               # as given (a size no body could fill)
+    elif cmp == 1:
+        raw, vals = make_raw(spec, rng)
         if spec.get("stream"):
             body = pack_simple(raw)                       # runs across rows and planes
         else:
@@ -123,7 +125,7 @@ def write_ilbm(spec, rng):
             if spec.get("nop"):
                 body = b"\x80" + body                     # a -128: no operation
     else:
-        body = raw
+        body = make_raw(spec, rng)[0]
     if spec.get("short"):
         body = body[:len(body) * 2 // 3]
     bmhd = struct.pack(">HHhhBBBBHBBhh", w, h, 3, -2, d, spec.get("masking", 0), cmp, spec.get("pad", 0),
@@ -209,6 +211,8 @@ def model_ilbm(data):
     rb = rowbytes(w)
     hasmask = not pbm and masking == 1
     rowsize = (w + (w & 1)) if pbm else rb * (d + (1 if hasmask else 0))
+    if rowsize * h > 0xffffffff:
+        return {"err": 103}                               # no buffer that size: ERROR_NO_FREE_STORE
     raw = unpack(body, rowsize * h) if cmp == 1 else (body[:rowsize * h] + bytes(max(0, rowsize * h - len(body))))
     argb, lut, alpha = [], [], []
     for y in range(h):
@@ -704,6 +708,19 @@ def expect_snd(length, stereo, cycles, pan, typ):
     return out
 
 
+def expect_sndvh(length):
+    # SDTA_VoiceHeader: copied, its rate and volume taken; SDTA_SampleLength 0 stops replay
+    out = ["== sndvh %d" % length, "vh %d 11025 32768" % length]
+    period = (CLOCK + 11025 // 2) // 11025
+    out.append("sps 11025 period %d vol 32" % period)
+    plan = plan_lines([bytes((s * 37) & 0xff for s in range(length))], length, period, 32, 1, False, -1, 1 << 12)
+    out += plan or []
+    out.append("trig %d" % (1 if plan else 0))
+    if plan:
+        out.append("stop")
+    return out + ["cleared", "live 0"]
+
+
 # ---- the cases -------------------------------------------------------------------
 
 def main():
@@ -748,6 +765,7 @@ def main():
         ({"w": 8, "h": 3, "depth": 4, "cmap": pal(4), "pbm": True}, 0, 1, 0, 0, 0, 0),
         ({"w": 8, "h": 3, "depth": 2, "cmap": pal(4), "nobody": True}, 0, 1, 0, 0, 0, 0),
         ({"w": 8, "h": 3, "depth": 2, "cmap": pal(4), "notform": True}, 0, 1, 0, 0, 0, 0),
+        ({"w": 32768, "h": 32768, "depth": 32, "body": b"\x00" * 8}, 0, 1, 0, 0, 0, 0),  # BODY size past 32 bits
     ]
     for i, (spec, sd, rm, dm, sw, sh, keep) in enumerate(ilbm_cases):
         data = write_ilbm(spec, rng)
@@ -786,6 +804,9 @@ def main():
                  (800, 0, 1, -1, 2), (800, 0, 1, -1, 3), (0, 0, 1, -1, 0)]:
         script.append("snd %d %d %d %d %d" % args)
         expected += expect_snd(*args)
+
+    script.append("sndvh 900")
+    expected += expect_sndvh(900)
 
     with open(os.path.join(outdir, "script.txt"), "w") as f:
         f.write("\n".join(script) + "\n")

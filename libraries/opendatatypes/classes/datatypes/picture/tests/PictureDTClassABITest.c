@@ -110,6 +110,7 @@ static void run_set(const char *cls)
     probe("default sourcemode %lu destmode %lu freesource %lu", get1(o, PDTA_SourceMode), get1(o, PDTA_DestMode),
           get1(o, PDTA_FreeSourceBitMap));
     probe("default maskplane %lu numpictures %lu", get1(o, PDTA_MaskPlane) != 0, get1(o, PDTA_GetNumPictures));
+    probe("default usefriendbitmap %lu", get1(o, PDTA_UseFriendBitMap));
     probe("write before bmhd %lu", DoMethod(o, PDTM_WRITEPIXELARRAY, lut, PBPAFMT_LUT8, 4, 0, 0, 4, 3));
     probe("maskplane settable %lu", SetAttrs(o, PDTA_MaskPlane, (ULONG)lut, TAG_DONE));
     DisposeObject(o);

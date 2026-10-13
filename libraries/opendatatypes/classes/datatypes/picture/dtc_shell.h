@@ -110,6 +110,10 @@ static odt_u32 e_coerce(const struct odt_cenv *e, struct odt_IClass *cl, void *o
 static void *e_alloc(const struct odt_cenv *e, odt_u32 n) { (void)e; return AllocVec(n ? n : 1, MEMF_ANY | MEMF_CLEAR); }
 static void e_free(const struct odt_cenv *e, void *p) { (void)e; if (p) FreeVec(p); }
 static void e_set_io_err(const struct odt_cenv *e, odt_s32 c) { (void)e; SetIoErr(c); }
+static void e_sem_obtain(const struct odt_cenv *e, struct odt_SignalSemaphore *s)
+{ (void)e; ObtainSemaphore((struct SignalSemaphore *)s); }
+static void e_sem_release(const struct odt_cenv *e, struct odt_SignalSemaphore *s)
+{ (void)e; ReleaseSemaphore((struct SignalSemaphore *)s); }
 static odt_s32 e_io_err(const struct odt_cenv *e) { (void)e; return IoErr(); }
 static odt_s32 e_write(const struct odt_cenv *e, odt_u32 fh, const void *buf, odt_s32 n)
 { (void)e; return Write((BPTR)fh, (APTR)buf, n); }
@@ -391,6 +395,8 @@ static void env_init(struct DTCBase *base)
     e->coerce = e_coerce;
     e->alloc = e_alloc;
     e->free = e_free;
+    e->sem_obtain = e_sem_obtain;
+    e->sem_release = e_sem_release;
     e->io_err = e_io_err;
     e->set_io_err = e_set_io_err;
     e->write = e_write;

@@ -55,6 +55,9 @@ The family's shell, env and build are in [`../picture`](../picture/README.md).
 | `DTM_WRITE` `DTWM_RAW` on sound.datatype itself | fails, `ERROR_NOT_IMPLEMENTED` | ABI test |
 | The control panel's height | 14 pixels | ABI test |
 | Player priority, allocation precedence | 21, 0 | ABI test |
+| `SDTA_SampleLength` set to 0 while it plays | the replay stopped before OM_SET returns | documented |
+| `SDTA_VoiceHeader` set | copied; its `vh_SamplesPerSec` (when not 0) and `vh_Volume` taken as rate and volume (tags after it win) | documented (V44) |
+| Waveform of a very long sample | column positions from quotient and remainder, no 32-bit overflow | ours |
 
 ## Not yet
 
