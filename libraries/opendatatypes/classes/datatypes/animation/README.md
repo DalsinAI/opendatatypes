@@ -35,8 +35,13 @@ The qemu test is `tests/m68k/test_opendatatypes_textanim.sh`.
 | ADTA_KeyFrame | Owned by the subclass; animation.datatype never frees it | ABI test |
 | ADTM_LOADNEWFORMATFRAME | Tried first, ADTM_LOADFRAME on failure | documented |
 | ADTM_STOP | Rewinds to frame 0 | measured |
-| Control panel | Default from DTA_ControlPanel, else on | ABI test |
+| Control panel | On unless OM_NEW's tags give DTA_ControlPanel (datatypesclass always answers it, FALSE) | ABI test |
 | Remap | ObtainBestPen per colour, planar to planar | measured |
+| A colour no pen could take | Shown as pen 0, not in ADTA_Allocated, never released | ours |
+| ADTA_Remap, ADTA_Screen or ADTA_NumColors changed | The pens released and the frame cache loaded again (remapped afresh) | ours |
+| DTA_TriggerMethods | Play, Pause, Stop, Rewind, Fast Forward (labels ours) | ABI test |
+| ADTM_START/PAUSE/STOP, STM_PLAY/PAUSE/STOP from a program | As the panel's buttons: the frame told when it moved, the gadget redrawn | ours |
+| Stopping the player | Waits until the process is gone (its start message comes back under Forbid), so the library can be expunged after | ours |
 | Sound | Started at ticks/fps x clock/period into the sample | measured |
 
 ## Not yet

@@ -11,8 +11,9 @@ static int room(const struct odt_cenv *env, struct grow *g, odt_u32 more)
 {
     char *q;
     odt_u32 size = g->size ? g->size : 4096, i;
+    /* more checked before it is added, so a huge one can't wrap round */
+    if (g->n >= ASC_MAXTEXT || more > ASC_MAXTEXT - g->n - 1) return 0;
     if (g->n + more + 1 <= g->size) return 1;
-    if (g->n + more + 1 > ASC_MAXTEXT) return 0;
     while (size < g->n + more + 1) size *= 2;
     if (!(q = env->alloc(env, size))) return 0;
     for (i = 0; i < g->n; i++) q[i] = g->p[i];
@@ -125,6 +126,18 @@ odt_u32 asc_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *ob
         set.ops_GInfo = ops->ops_GInfo;
         env->do_super(env, cl, o, &set);     /* text.datatype keeps its own copy */
         env->free(env, buf);
+        {
+            /* no copy (no memory): no object with an empty text */
+            odt_u32 kept = 0;
+            if (len && (!dtc_get(env, o, TDT_TDTA_Buffer, &kept) || !kept)) {
+                struct odt_dtGeneral d;
+                d.MethodID = ODT_OM_DISPOSE;
+                d.dtg_GInfo = 0;
+                env->coerce(env, cl, o, &d);
+                env->set_io_err(env, DTC_ERROR_NO_FREE_STORE);
+                return 0;
+            }
+        }
         return (odt_u32)o;
     }
     return env->do_super(env, cl, obj, msg);

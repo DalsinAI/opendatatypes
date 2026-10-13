@@ -1443,6 +1443,7 @@ def expect_nclass(data, ops, truth):
                 redraw()
         elif op.startswith("start"):
             f = min(int(op[5:]), n - 1)
+            was = play.frame
             sound_off()
             s = cache(f)
             play.start(f, s["dur"] if s else 1, f)
@@ -1450,6 +1451,10 @@ def expect_nclass(data, ops, truth):
             if not player[0]:
                 out.append("player %d" % fps)
                 player[0] = True
+            # a program's play: the frame told when it moved, and redrawn
+            if play.frame != was:
+                tell()
+            redraw()
             out.append("%s -> 1" % op)
         elif op.startswith("locate"):
             f = min(int(op[6:]), n - 1)
@@ -1464,6 +1469,7 @@ def expect_nclass(data, ops, truth):
             redraw()
             out.append("%s -> 1" % op)
         elif op in ("pause", "stop"):
+            was = play.frame
             if player[0]:
                 out.append("playerstop")
                 player[0] = False
@@ -1471,6 +1477,9 @@ def expect_nclass(data, ops, truth):
             play.state = 2 if op == "pause" else 0
             if op == "stop":
                 play.frame = 0
+            if play.frame != was:
+                tell()
+            redraw()
             out.append("%s -> 1" % op)
         elif op.startswith("preload"):
             st["preload"] = int(op[7:]) or 1
@@ -1482,6 +1491,16 @@ def expect_nclass(data, ops, truth):
             st["sample"] = True
             out.append("sample -> 0")
         elif op == "noremap":
+            if st["remap"]:
+                # remapped frames go: the pens back, the cache loaded again
+                if st["pens"]:
+                    for i in range(ncol):
+                        out.append("releasepen %d" % table[i])
+                    st["pens"] = False
+                for i, sl in enumerate(st["slots"]):
+                    if sl is not None:
+                        unload(sl)
+                        st["slots"][i] = None
             st["remap"] = False
             out.append("noremap -> 0")
         elif op == "nopanel":

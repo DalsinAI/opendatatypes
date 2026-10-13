@@ -458,7 +458,7 @@ static int set_attrs(const struct odt_cenv *env, struct tdt_inst *in, const stru
     const struct odt_TagItem *t, *list = tags;
     const char *nbuf = 0;
     odt_u32 nlen = ~0UL;
-    int given = 0, changed = 0;
+    int given = 0, changed = 0, oom = 0;
     while ((t = dtc_next_tag(&list)) != 0) {
         switch (t->ti_Tag) {
         case TDT_TDTA_Buffer: nbuf = (const char *)t->ti_Data; given = 1; break;
@@ -483,6 +483,8 @@ static int set_attrs(const struct odt_cenv *env, struct tdt_inst *in, const stru
         if (!nbuf) nlen = 0;
         if (nbuf != in->buffer || nlen != in->buffer_len) {
             copy = env->alloc(env, nlen + 1);
+            if (!copy && nlen)
+                oom = 1;                    /* no memory for the copy: the old text stays, the caller fails */
             if (copy || !nlen) {
                 for (i = 0; copy && i < nlen; i++) copy[i] = nbuf[i];
                 drop_layout(env, in);
@@ -494,7 +496,7 @@ static int set_attrs(const struct odt_cenv *env, struct tdt_inst *in, const stru
         }
     }
     if (changed) drop_layout(env, in);
-    return changed;
+    return oom ? -1 : changed;
 }
 
 static void notify(const struct odt_cenv *env, void *obj, struct odt_GadgetInfo *gi, struct odt_TagItem *tags)
@@ -730,7 +732,15 @@ odt_u32 tdt_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *ob
         ta = dtc_tag_data(ops->ops_AttrList, ODT_DTA_TextAttr, 0);
         if (!ta) dtc_get(env, o, ODT_DTA_TextAttr, &ta);
         set_font(env, in, (void *)ta, ops->ops_GInfo);
-        set_attrs(env, in, ops->ops_AttrList, ops->ops_GInfo);
+        if (set_attrs(env, in, ops->ops_AttrList, ops->ops_GInfo) < 0) {
+            /* TDTA_Buffer couldn't be copied: no object without its text */
+            struct odt_dtGeneral d;
+            d.MethodID = ODT_OM_DISPOSE;
+            d.dtg_GInfo = 0;
+            env->coerce(env, cl, o, &d);
+            env->set_io_err(env, DTC_ERROR_NO_FREE_STORE);
+            return 0;
+        }
         return (odt_u32)o;
     }
     case ODT_OM_DISPOSE:
@@ -745,7 +755,11 @@ odt_u32 tdt_dispatch(const struct odt_cenv *env, struct odt_IClass *cl, void *ob
         struct odt_opSet *ops = msg;
         odt_u32 r = env->do_super(env, cl, obj, msg);
         if (env->sem_obtain && dtc_si(obj)) env->sem_obtain(env, &dtc_si(obj)->si_Lock);
-        r += (odt_u32)set_attrs(env, in, ops->ops_AttrList, ops->ops_GInfo);
+        {
+            int c = set_attrs(env, in, ops->ops_AttrList, ops->ops_GInfo);
+            if (c < 0) env->set_io_err(env, DTC_ERROR_NO_FREE_STORE);   /* the update failed: IoErr says so */
+            else r += (odt_u32)c;
+        }
         if (env->sem_release && dtc_si(obj)) env->sem_release(env, &dtc_si(obj)->si_Lock);
         return r;
     }
