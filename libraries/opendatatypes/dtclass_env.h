@@ -477,8 +477,10 @@ struct odt_cenv {
      * copy of msg, answering the process or NULL; ask one to stop
      * (SIGBREAKF_CTRL_C); and, from inside a class's DTM_ASYNCLAYOUT or
      * DTM_PRINT, whether the running process has been asked to stop.
-     * start_process answers before the new process does anything (the
-     * core records it in DTA_LayoutProc or DTA_PrinterProc first). */
+     * start_process answers before the new process does anything else
+     * (the core records it in DTA_LayoutProc or DTA_PrinterProc first),
+     * but the process runs odt_proc_hold first and start_process answers
+     * only once it has (OM_DISPOSE then waits for the process). */
     void *(*start_process)(const struct odt_cenv *env, int printing, void *obj, void *win, void *req, void *msg);
     void (*signal_stop)(const struct odt_cenv *env, void *proc);
     int (*check_stop)(const struct odt_cenv *env);
@@ -540,7 +542,7 @@ struct odt_dtinst {
     /* what the library keeps with an object */
     void *window, *requester;           /* AddDTObject's */
     void *class_library;                /* the class library NewDTObjectA opened for it */
-    struct odt_SignalSemaphore print_lock; /* held by the print process while it runs */
+    struct odt_SignalSemaphore proc_lock; /* held shared by the layout and print processes */
     odt_u32 lock;                       /* DTA_Handle's file lock (DTST_FILE): the object's, UnLocked with it */
     odt_u32 reserved[4];
 };
@@ -566,6 +568,7 @@ odt_u32 odt_dtclass_inst_size(void);
  * under si_Lock, then the notification; and a printing process's
  * DTM_PRINT (PrintDTObjectA). Each answers the method's result. */
 odt_u32 odt_layout_run(const struct odt_cenv *env, void *obj, struct odt_gpLayout *gpl);
+void odt_proc_hold(const struct odt_cenv *env, void *obj);
 odt_u32 odt_print_run(const struct odt_cenv *env, void *obj, struct odt_dtPrint *msg);
 
 /* The object half of datatypes.library's calls (the library shell adds

@@ -902,6 +902,7 @@ struct startup {
     struct Message msg;
     const struct odt_cenv *env;
     APTR obj;
+    struct Task *parent;                /* signalled once the process holds proc_lock */
     UBYTE printing;
     struct gpLayout gpl;
     struct GadgetInfo gi;
@@ -914,6 +915,8 @@ static void proc_entry(void)
     struct startup *s;
     WaitPort(&me->pr_MsgPort);
     s = (struct startup *)GetMsg(&me->pr_MsgPort);
+    odt_proc_hold(s->env, s->obj);
+    Signal(s->parent, SIGF_SINGLE);
     if (s->printing) odt_print_run(s->env, s->obj, (struct odt_dtPrint *)&s->pr);
     else odt_layout_run(s->env, s->obj, (struct odt_gpLayout *)&s->gpl);
     FreeVec(s);
@@ -950,9 +953,15 @@ static void *ce_start_process(const struct odt_cenv *e, int printing, void *obj,
     t[2].ti_Tag = NP_StackSize; t[2].ti_Data = 16384;
     t[3].ti_Tag = NP_Priority;  t[3].ti_Data = 0;
     t[4].ti_Tag = TAG_DONE;     t[4].ti_Data = 0;
+    /* the process holds proc_lock before we answer (OM_DISPOSE waits on
+     * it): it says so with SIGF_SINGLE, which needs no allocation and
+     * which no semaphore of ours is waiting on now */
+    s->parent = FindTask(NULL);
+    SetSignal(0, SIGF_SINGLE);
     p = CreateNewProc(t);
     if (!p) { FreeVec(s); return NULL; }
     PutMsg(&p->pr_MsgPort, &s->msg);
+    Wait(SIGF_SINGLE);
     return p;
 }
 

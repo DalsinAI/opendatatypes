@@ -345,26 +345,40 @@ static void *ax_player_start(const struct odt_cenv *e, struct odt_IClass *cl, vo
 /* Stops the process and waits until it is gone (its start message comes
  * back as its last act, under Forbid), then frees p: nothing of ours runs
  * after this returns, so the library may be closed and expunged. Safe
- * from any task (no dos calls). From the process itself, or with no port
- * for the answer, it doesn't wait: the process frees p as it goes. */
+ * from any task (no dos calls), and it needs no memory: the answer comes
+ * to a port on our stack, on SIGF_SINGLE (no semaphore of ours is waiting
+ * on it then). From the process itself it doesn't wait: the process frees
+ * p as it goes. */
 static void ax_player_stop(const struct odt_cenv *e, void *pp)
 {
     struct ax_player *p = pp;
     struct Process *proc;
-    struct MsgPort *port;
+    struct MsgPort port;
+    int wait;
     (void)e;
     if (!p) return;
     proc = p->proc;
-    port = FindTask(NULL) != &proc->pr_Task ? CreateMsgPort() : NULL;
+    wait = FindTask(NULL) != &proc->pr_Task;
+    if (wait) {
+        port.mp_Node.ln_Type = NT_MSGPORT;
+        port.mp_Node.ln_Name = NULL;
+        port.mp_Node.ln_Pri = 0;
+        port.mp_Flags = PA_SIGNAL;
+        port.mp_SigBit = SIGB_SINGLE;
+        port.mp_SigTask = FindTask(NULL);
+        port.mp_MsgList.lh_Head = (struct Node *)&port.mp_MsgList.lh_Tail;
+        port.mp_MsgList.lh_Tail = NULL;
+        port.mp_MsgList.lh_TailPred = (struct Node *)&port.mp_MsgList.lh_Head;
+    }
     ObtainSemaphore(&p->sem);
-    p->msg.mn_ReplyPort = port;
+    p->msg.mn_ReplyPort = wait ? &port : NULL;
     p->stop = 1;
     Signal(&proc->pr_Task, SIGBREAKF_CTRL_C);
     ReleaseSemaphore(&p->sem);
-    if (!port) return;
-    while (!GetMsg(port))
-        WaitPort(port);
-    DeleteMsgPort(port);
+    if (!wait) return;
+    while (!GetMsg(&port))
+        WaitPort(&port);
+    SetSignal(0, SIGF_SINGLE);          /* none left over for a semaphore's wait */
     FreeVec(p);
 }
 
