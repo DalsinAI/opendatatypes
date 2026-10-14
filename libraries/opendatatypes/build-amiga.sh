@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (c) 2026 DalsinAI. MIT licence (see LICENSE at the repository root).
 # OpenDatatypes with the os32-gcc16 stove: checks datatypes.lvo against the
 # NDK 3.2 datatypes_lib.fd and every constant and layout dt_core.h and
 # dtclass_env.h carry against the NDK 3.2 headers (ndk_check.c, compiled

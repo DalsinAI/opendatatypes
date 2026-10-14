@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 DalsinAI. MIT licence (see LICENSE at the repository root).
 """Compare an open library's .lvo table with the NDK's _lib.fd: same call at every LVO,
 same registers. A slot the fd keeps private may be private here, or named
 with the fd's registers (a call the vendor documents but keeps out of its

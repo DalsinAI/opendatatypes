@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (c) 2026 DalsinAI. MIT licence (see LICENSE at the repository root).
 # OpenDatatypes (datatypes.library) core: libraries/opendatatypes/dt_core.c,
 # built with an m68k cross GCC at -O0 and -O2 for the 68000 and 68040,
 # checked to call nothing but libgcc, and run under qemu-m68k against

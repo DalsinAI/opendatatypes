@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 DalsinAI. MIT licence (see LICENSE at the repository root). */
 /* OpenDatatypes' datatypesclass under qemu-m68k: libraries/opendatatypes/
  * dtclass_core.c hosted on OpenIntuition's BOOPSI core (rootclass and
  * gadgetclass, libraries/openintuition), with a probe subclass

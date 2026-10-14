@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (c) 2026 DalsinAI. MIT licence (see LICENSE at the repository root).
 # OpenDatatypes' text.datatype and ascii.datatype with the os32-gcc16
 # stove: the .lvo files against an fd if the NDK has one, then
 #   text.datatype, ascii.datatype            the replacements (47.100)
