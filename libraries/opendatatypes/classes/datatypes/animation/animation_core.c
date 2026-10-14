@@ -1,5 +1,5 @@
 /* OpenDatatypes animation.datatype core.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  * Clean-room; see animation_core.h for what this is written from.
  */
 #include "animation_core.h"

@@ -1,5 +1,5 @@
 /* Open8SVX: an open 8svx.datatype for AmigaOS 3.2, API and ABI compatible.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room: written from the autodocs, the NDK 3.2 headers and the IFF
  * specifications, never from Kickstart's, Hyperion's or AROS's code or
@@ -25,13 +25,13 @@
 #endif
 #define DTC_DISPATCH svx_dispatch
 #define DTC_INST_SIZE svx_inst_size
-#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) Open8SVX, Dalsin Limited\r\n"
+#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) Open8SVX, DalsinAI\r\n"
 #define DTC_NEED_AUDIO
 
 #include "svx_core.h"
 #include "../picture/dtc_shell.h"
 
 static const char ver[] __attribute__((used)) =
-    "\0$VER: " LIBNAME " 47.100 (13.10.2026) Open8SVX, Dalsin Limited";
+    "\0$VER: " LIBNAME " 47.100 (13.10.2026) Open8SVX, DalsinAI";
 
 DTC_ROMTAG;

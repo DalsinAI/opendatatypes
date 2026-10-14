@@ -1,6 +1,6 @@
 /* OpenDatatypes: an open datatypes.library for AmigaOS 3.2, API and ABI
  * compatible.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room: written from datatypes.library's autodocs, the NDK 3.2
  * headers' published layouts and OS 3.2's answers measured by
@@ -131,9 +131,9 @@ int start(void) { return -1; }
 
 static const char lib_name[] = LIBNAME;
 static const char lib_id[] =
-    "datatypes.library 47.100 (13.10.2026) OpenDatatypes, Dalsin Limited\r\n";
+    "datatypes.library 47.100 (13.10.2026) OpenDatatypes, DalsinAI\r\n";
 static const char lib_ver[] __attribute__((used)) =
-    "\0$VER: datatypes.library 47.100 (13.10.2026) OpenDatatypes, Dalsin Limited";
+    "\0$VER: datatypes.library 47.100 (13.10.2026) OpenDatatypes, DalsinAI";
 static const char dos_name[] = "dos.library";
 static const char utility_name[] = "utility.library";
 static const char iffparse_name[] = "iffparse.library";

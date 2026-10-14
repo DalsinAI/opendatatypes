@@ -1,7 +1,7 @@
 /* AnimationClassABITest: OS 3.2's animation.datatype and anim.datatype
  * next to OpenDatatypes' (openanimation.datatype, openanim.datatype), on
  * ANIMs the test makes itself, every answer printed side by side.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  *   AnimationClassABITest         each line where ours answers otherwise
  *   AnimationClassABITest PROBE   OS 3.2's answers only, for the README's

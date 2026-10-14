@@ -1,6 +1,6 @@
 /* Open8SVX: 8svx.datatype's class (a sound.datatype subclass) as a core
  * with no Amiga headers, over struct odt_cenv.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room, from the IFF 8SVX specification (EA, public), the sound_dtc
  * and datatypes autodocs and the NDK 3.2 headers' layouts; never from

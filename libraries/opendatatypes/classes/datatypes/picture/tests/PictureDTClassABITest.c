@@ -1,6 +1,6 @@
 /* PictureDTClassABITest: OS 3.2's picture.datatype and OpenPicture side by
  * side.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Makes pictures in memory (DTST_RAM objects of picture.datatype itself)
  * and asks each class the same: its defaults, PDTM_WRITEPIXELARRAY and

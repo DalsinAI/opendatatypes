@@ -22,7 +22,7 @@
  *                                (dispose, print, dtdispose, relayout), run quietly; one line
  *   print                        PrintDTObjectA
  *   dispose
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  */
 #include <stdio.h>
 #include <stdlib.h>

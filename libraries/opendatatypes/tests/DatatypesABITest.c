@@ -1,6 +1,6 @@
 /* DatatypesABITest: OS 3.2's datatypes.library and OpenDatatypes side by
  * side.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Runs one set of calls through a datatypes.library base and writes every
  * answer as a line of text. With opendatatypes.library in LIBS: (or the

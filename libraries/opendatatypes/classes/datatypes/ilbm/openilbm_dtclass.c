@@ -1,5 +1,5 @@
 /* OpenILBM: an open ilbm.datatype for AmigaOS 3.2, API and ABI compatible.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room: written from the autodocs, the NDK 3.2 headers and the IFF
  * specifications, never from Kickstart's, Hyperion's or AROS's code or
@@ -25,13 +25,13 @@
 #endif
 #define DTC_DISPATCH ilbm_dispatch
 #define DTC_INST_SIZE ilbm_inst_size
-#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenILBM, Dalsin Limited\r\n"
+#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenILBM, DalsinAI\r\n"
 #define DTC_NEED_GFX
 
 #include "ilbm_core.h"
 #include "../picture/dtc_shell.h"
 
 static const char ver[] __attribute__((used)) =
-    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenILBM, Dalsin Limited";
+    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenILBM, DalsinAI";
 
 DTC_ROMTAG;

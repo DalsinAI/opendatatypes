@@ -1,5 +1,5 @@
 /* ILBMDTClassABITest: OS 3.2's ilbm.datatype and OpenILBM side by side.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Writes ILBM and PBM files made here (no media of anyone's) to DIR= (T:)
  * and loads each through OS 3.2's ilbm.datatype and through
