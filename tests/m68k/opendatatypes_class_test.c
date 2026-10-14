@@ -81,7 +81,7 @@ static void u_free(struct ou_env *e, void *m) { (void)e; q_free(m); }
 static void u_lock(struct ou_env *e, void *l) { (void)e; (void)l; }
 static void u_initlock(struct ou_env *e, void *l) { (void)e; memset(l, 0, OU_LOCKSPACE); }
 static void u_reply(struct ou_env *e, void *m, void *name) { (void)e; (void)m; (void)name; }
-static struct ou_env uenv = { u_alloc, u_free, u_lock, u_lock, u_initlock, u_reply };
+static struct ou_env uenv = { u_alloc, u_free, u_lock, u_lock, u_initlock, u_reply, 0 };
 
 /* ---- the BOOPSI host -------------------------------------------------------- */
 
