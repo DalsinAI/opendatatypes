@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Compare an open library's .lvo table with the NDK's _lib.fd: same call at every LVO,
-same registers. Private slots in the fd may be private or named here only
-if the fd has them private. Exit 1 on any difference, listing each."""
+same registers. A slot the fd keeps private may be private here, or named
+with the fd's registers (a call the vendor documents but keeps out of its
+fd's public part). A call after the fd's last slot is a difference unless
+its line says "beyond the fd" (a later version's call the fd predates).
+Exit 1 on any difference, listing each."""
 import os, re, sys
 
 def ndk32_fd(path):
@@ -33,12 +36,15 @@ def read_fd(path):
         bias += 6
     return out
 
+BEYOND = set()
+
 def read_lvo(path):
     out = {}
-    for line in open(path):
-        line = line.split("#")[0].split()
+    for raw in open(path):
+        line = raw.split("#")[0].split()
         if not line: continue
         out[int(line[0])] = (line[1], line[2] if len(line) > 2 else "")
+        if "beyond the fd" in raw: BEYOND.add(int(line[0]))
     return out
 
 sys.argv[1] = ndk32_fd(sys.argv[1])
@@ -48,12 +54,16 @@ for lvo in sorted(set(fd) | set(ours), reverse=True):
     f, o = fd.get(lvo), ours.get(lvo)
     if f is None and o[0] == "private":
         pass                                  # a slot the NDK leaves out is private
+    elif f is None and lvo in BEYOND and lvo < min(fd):
+        print("%d: %s, beyond the fd (not checked)" % (lvo, o[0]))
     elif f is None:
         print("%d: ours has %s, the NDK has nothing" % (lvo, o[0])); bad = 1
     elif o is None:
         print("%d: the NDK has %s(%s), ours has nothing" % (lvo, f[0], f[1])); bad = 1
     elif f[0] == "private" and o[0] == "private":
         pass
+    elif f[0] == "private" and o[1] == f[1]:
+        pass                                  # named here, private in the fd: same registers
     elif f != o:
         print("%d: the NDK has %s(%s), ours %s(%s)" % (lvo, f[0], f[1], o[0], o[1])); bad = 1
 print("%s %s the NDK's %s" % (sys.argv[2], "differs from" if bad else "matches", sys.argv[1]))
