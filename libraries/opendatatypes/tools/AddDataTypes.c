@@ -121,7 +121,7 @@ int main(void)
             }
         }
     }
-    hook.h_Entry = (HOOKFUNC)list_one;
+    hook.h_Entry = (void *)list_one;
     hook.h_SubEntry = NULL;
     hook.h_Data = NULL;
     added = add_types(files, flags, &hook);

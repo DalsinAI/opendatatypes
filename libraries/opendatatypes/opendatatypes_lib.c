@@ -452,7 +452,7 @@ static struct Library *lib_init(REG(d0, struct ODBase *base), REG(a0, BPTR segli
     the_base = base;
     cenv.ctx = base;
     cenv.dtclass = (struct odt_IClass *)base->dtclass;
-    base->dtclass->cl_Dispatcher.h_Entry = (HOOKFUNC)dt_dispatch;
+    base->dtclass->cl_Dispatcher.h_Entry = (void *)dt_dispatch;
     base->dtclass->cl_UserData = (ULONG)&cenv;
     AddClass(base->dtclass);
     return &base->lib;
@@ -806,7 +806,7 @@ static void *iff_make(UBYTE kind, ULONG stream, const void *at, ULONG size, int 
     default:
         r->at = at;
         r->size = (LONG)size;
-        r->hook.h_Entry = (HOOKFUNC)mem_stream;
+        r->hook.h_Entry = (void *)mem_stream;
         r->hook.h_Data = r;
         iff->iff_Stream = (ULONG)r;
         InitIFF(iff, IFFF_RSEEK | IFFF_FSEEK, &r->hook);
