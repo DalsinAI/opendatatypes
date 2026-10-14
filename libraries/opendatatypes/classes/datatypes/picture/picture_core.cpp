@@ -1,5 +1,5 @@
 /* OpenPicture: picture.datatype's class, lean C++ with no Amiga headers.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room, from the picture_dtc autodoc, datatypes/pictureclass.h's
  * published layouts (NDK 3.2), the IFF ILBM specification (EA, public)

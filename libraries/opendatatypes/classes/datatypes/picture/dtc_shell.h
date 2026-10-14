@@ -1,7 +1,7 @@
 /* OpenDatatypes class libraries: the C around the picture, ilbm, sound and
  * 8svx cores. Built only on the os32-gcc16 stove, with the NDK 3.2
  * headers; the cores never see them.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room, from the autodocs of exec, dos, intuition, graphics,
  * iffparse, datatypes and audio.device and the NDK 3.2 headers' published

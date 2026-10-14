@@ -1,6 +1,6 @@
 /* AddDataTypes: OpenDatatypes' own, for datatypes.library 47.100 and up
  * (OpenDatatypes).
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  *   AddDataTypes [FILES/M] [QUIET/S] [REFRESH/S] [LIST/S]
  *

@@ -1,7 +1,7 @@
 /* TextClassABITest: OS 3.2's text.datatype and ascii.datatype next to
  * OpenDatatypes' (opentext.datatype, openascii.datatype), on the same
  * texts, every answer printed side by side.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  *   TextClassABITest          each line where ours answers otherwise
  *   TextClassABITest PROBE    OS 3.2's answers only, for the README's

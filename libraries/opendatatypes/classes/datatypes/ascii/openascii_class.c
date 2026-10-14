@@ -1,6 +1,6 @@
 /* OpenDatatypes: an open ascii.datatype for AmigaOS 3.2, API and ABI
  * compatible.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room: written from the ascii_dtc and text_dtc autodocs and OS
  * 3.2's answers measured by tests/TextClassABITest, never from
@@ -24,13 +24,13 @@
 #endif
 #define DTC_DISPATCH asc_dispatch
 #define DTC_INST_SIZE asc_inst_size
-#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenDatatypes, Dalsin Limited\r\n"
+#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenDatatypes, DalsinAI\r\n"
 
 #include "ascii_core.h"
 #include "../text/dtc_shell.h"
 
 static const char ver[] __attribute__((used)) =
-    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenDatatypes, Dalsin Limited";
+    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenDatatypes, DalsinAI";
 
 static const APTR lib_vectors[] = { DTC_STD_VECTORS, (APTR)-1 };
 

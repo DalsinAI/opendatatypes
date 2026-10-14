@@ -1,6 +1,6 @@
 /* OpenDatatypes: datatypesclass, the superclass of every datatype class,
  * in plain C with no Amiga headers. See dtclass_env.h.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 DalsinAI. MIT.
  *
  * Clean-room: written from the datatypesclass autodoc, datatypes.library's
  * autodocs and the NDK 3.2 layouts, never from Kickstart's, Hyperion's or
