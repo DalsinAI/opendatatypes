@@ -35,7 +35,7 @@ for lib in datatypes opendatatypes; do
     [ "$lib" = datatypes ] || cls=opendatatypesclass
     # shellcheck disable=SC2086
     "$CC" $LIBFLAGS -DLIBNAME="\"$lib.library\"" -DDTCLASSNAME="\"$cls\"" -I"$HERE" -o "$OUT/libs/$lib.library" \
-      "$HERE/opendatatypes_lib.c" "$HERE/dt_core.c" "$HERE/dtclass_core.c" -lgcc
+      "$HERE/opendatatypes_lib.c" "$HERE/dt_core.c" "$HERE/dtclass_core.c" "$HERE/../../libraries/common/open_arith.c" -lgcc
     echo "$OUT/libs/$lib.library ($(wc -c < "$OUT/libs/$lib.library") bytes)"
     und=$("$P/bin/m68k-amigaos-nm" -u "$OUT/libs/$lib.library" || true)
     [ -z "$und" ] || { echo "undefined in $lib.library: $und" >&2; exit 1; }

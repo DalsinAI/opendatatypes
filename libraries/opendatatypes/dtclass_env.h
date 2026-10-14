@@ -158,7 +158,7 @@ struct odt_InputEvent {
     struct odt_InputEvent *ie_NextEvent;
     odt_u8 ie_Class, ie_SubClass;
     odt_u16 ie_Code, ie_Qualifier;
-    odt_s16 ie_X, ie_Y;
+    odt_s16 ie_PosX, ie_PosY;          /* ie_X, ie_Y: devices/inputevent.h makes those macros */
     odt_u32 ie_Secs, ie_Micro;
 };
 ODT_STATIC_ASSERT(sizeof(struct odt_InputEvent) == 22, "InputEvent");

@@ -1397,7 +1397,7 @@ static LONG L_DrawDTObjectA(REG(a0, struct RastPort *rp), REG(a1, Object *o), RE
 
 static void L_ReleaseDTDrawInfo(REG(a0, Object *o), REG(a1, APTR handle))
 {
-    struct dtReleaseDrawInfo m;
+    struct odt_dtReleaseDrawInfo m;     /* NDK 3.2 has no struct dtReleaseDrawInfo */
     if (!o) return;
     m.MethodID = DTM_RELEASEDRAWINFO;
     m.dtr_Handle = handle;

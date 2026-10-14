@@ -317,8 +317,10 @@ AT(odt_dtDraw, dtd_Height, dtDraw, dtd_Height);
 AT(odt_dtDraw, dtd_TopHoriz, dtDraw, dtd_TopHoriz);
 AT(odt_dtDraw, dtd_TopVert, dtDraw, dtd_TopVert);
 AT(odt_dtDraw, dtd_AttrList, dtDraw, dtd_AttrList);
-SIZE(odt_dtReleaseDrawInfo, dtReleaseDrawInfo);
-AT(odt_dtReleaseDrawInfo, dtr_Handle, dtReleaseDrawInfo, dtr_Handle);
+/* NDK 3.2's datatypesclass.h has DTM_RELEASEDRAWINFO but no struct for it:
+ * the autodoc's MethodID and dtr_Handle */
+SAME(sizeof(struct odt_dtReleaseDrawInfo), 8);
+SAME(offsetof(struct odt_dtReleaseDrawInfo, dtr_Handle), 4);
 SIZE(odt_dtWrite, dtWrite);
 AT(odt_dtWrite, dtw_GInfo, dtWrite, dtw_GInfo);
 AT(odt_dtWrite, dtw_FileHandle, dtWrite, dtw_FileHandle);
@@ -336,7 +338,7 @@ SIZE(odt_IBox, IBox); SIZE(odt_Rectangle, Rectangle);
 SIZE(odt_Gadget, Gadget); SIZE(odt_ExtGadget, ExtGadget);
 AT(odt_Gadget, SpecialInfo, Gadget, SpecialInfo); AT(odt_Gadget, GadgetID, Gadget, GadgetID);
 SIZE(odt_GadgetInfo, GadgetInfo); AT(odt_GadgetInfo, gi_Domain, GadgetInfo, gi_Domain); AT(odt_GadgetInfo, gi_DrInfo, GadgetInfo, gi_DrInfo);
-SIZE(odt_InputEvent, InputEvent); AT(odt_InputEvent, ie_Code, InputEvent, ie_Code); AT(odt_InputEvent, ie_X, InputEvent, ie_position);
+SIZE(odt_InputEvent, InputEvent); AT(odt_InputEvent, ie_Code, InputEvent, ie_Code); AT(odt_InputEvent, ie_PosX, InputEvent, ie_position);
 SIZE(odt_gpInput, gpInput); SIZE(odt_gpLayout, gpLayout); SIZE(odt_gpRender, gpRender); SIZE(odt_gpHitTest, gpHitTest); SIZE(odt_gpGoInactive, gpGoInactive);
 AT(odt_gpInput, gpi_Mouse, gpInput, gpi_Mouse);
 SAME(ODT_GM_HITTEST, GM_HITTEST); SAME(ODT_GM_RENDER, GM_RENDER); SAME(ODT_GM_GOACTIVE, GM_GOACTIVE);
