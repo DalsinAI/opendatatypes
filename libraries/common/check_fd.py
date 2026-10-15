@@ -42,7 +42,9 @@ BEYOND = set()
 def read_lvo(path):
     out = {}
     for raw in open(path):
-        line = raw.split("#")[0].split()
+        # ">REGS": registers the call leaves for its caller besides d0
+        # (openexec's gen_stubs.py); the fd has no such column
+        line = [t for t in raw.split("#")[0].split() if not t.startswith(">")]
         if not line: continue
         out[int(line[0])] = (line[1], line[2] if len(line) > 2 else "")
         if "beyond the fd" in raw: BEYOND.add(int(line[0]))
