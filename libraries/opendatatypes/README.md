@@ -12,7 +12,7 @@ plan is [`../OPEN_LIBRARIES.md`](../OPEN_LIBRARIES.md).
 | --- | --- | --- |
 | D1 | The descriptor database (DEVS:DataTypes), recognition (ObtainDataTypeA by file and memory; ReleaseDataType), recognition code (DTCD), the V45 method tables, GetDTString, GetDTTriggerMethodDataFlags | written, waiting on OS 3.2's probe |
 | D2 | datatypesclass and the object calls: NewDTObjectA, DisposeDTObject, Set/GetDTAttrsA, Add/RemoveDTObject, RefreshDTObjectA, DoDTMethodA, DoAsyncLayout (with its layout process), Obtain/ReleaseDTDrawInfo and DrawDTObjectA (-120 to -132), StartDragSelect, SaveDTObjectA, PrintDTObjectA (with its process); DTST_CLIPBOARD; the datatypes.library replacement | written: core tested under qemu, shell built only on the stove, waiting on OS 3.2's OBJ probe |
-| D3 | LockDataType, FindToolNodeA, LaunchToolA (-144 to -156), sys/datatypes.catalog (`catalogs/datatypes.cd`), our own AddDataTypes (`tools/`) | written, as D2 |
+| D3 | LockDataType, FindToolNodeA, LaunchToolA (-144 to -156), sys/datatypes.catalog (`catalogs/datatypes.cd`), the private call our AddDataTypes makes (the command is OpenBench's, `commands/adddatatypes`) | written, as D2 |
 | D4 | The class libraries (picture, ilbm, sound, 8svx, text, ascii, animation, anim) | the class helpers, in `classes/datatypes/` |
 
 `datatypes.library` is the replacement; it makes the public class
@@ -31,9 +31,8 @@ PrintDTObjectA and StartDragSelect answer 0.
 | `opendatatypes_lib.c` | The library: RomTag, the jump table in datatypes.library's LVO order, each call in its documented registers; reads DEVS:DataTypes the first time it is asked, loads recognition code from memory with InternalLoadSeg; makes datatypesclass under gadgetclass and fills its env (BOOPSI through CallHookPkt, DOS, iffparse on files, the clipboard and memory, the layout and printing processes, the catalog). |
 | `datatypes.lvo` | The jump table, LVO by LVO, as NDK 3.2's fd has it: -120 to -132 and -144 to -252 private (the comments say what ours keep there), the V45 calls from -258. `../common/check_fd.py` compares it with the NDK's `datatypes_lib.fd`. |
 | `ndk_check.c` | Every constant and layout `dt_core.h` and `dtclass_env.h` carry, checked against the NDK 3.2 headers when it compiles. |
-| `tools/AddDataTypes.c` | `AddDataTypes FILES/M,QUIET/S,REFRESH/S,LIST/S` for OpenDatatypes, through the private call at -252. |
 | `catalogs/datatypes.cd` | sys/datatypes.catalog's descriptor: every id GetDTString has, with the built-in English. |
-| `build-amiga.sh` | With the os32-gcc16 stove: the LVO and NDK checks, then `datatypes.library`, `opendatatypes.library`, `AddDataTypes` and `DatatypesABITest`. |
+| `build-amiga.sh` | With the os32-gcc16 stove: the LVO and NDK checks, then `datatypes.library`, `opendatatypes.library`, `AddDataTypes` (OpenBench's, built by `commands/build-amiga.sh`) and `DatatypesABITest`. |
 | `tests/DatatypesABITest.c` | Runs the calls through OS 3.2's datatypes.library and `opendatatypes.library` and prints each line that differs; PROBE prints OS 3.2's answers. DESC adds descriptors made to ask one question each (lab Amigas only), OBJ the object calls (objects from a text, an ILBM, bytes, memory, the clipboard and DTST_RAM), SCAN=dir recognises a directory's files, LIST dumps OS 3.2's own list. |
 
 ## What the autodocs leave open
@@ -149,7 +148,10 @@ or open ("ABI test": `DatatypesABITest OBJ` has the PROBE line).
   ABI test's OBJ part are built only with the os32-gcc16 stove, which the
   cloud hasn't got (syntax was checked here against stand-in headers).
 - The private slots' places (-120 to -156) and the -252 call wait on the
-  OBJ probe; if OS 3.2 keeps something else there, they move.
+  OBJ probe; if OS 3.2 keeps something else there, they move. Which
+  private slot OS 3.2.3's own AddDataTypes calls, and with what, is
+  `obspy`'s to measure (`commands/tests/WAVE3.md`); once it has, ours
+  takes the same call and OpenBench's AddDataTypes works with both.
 - OS 3.2's own C:AddDataTypes doesn't work with ours (it uses the library's
   private list, whose layout isn't measured); ours doesn't work with OS 3.2's
   library.
