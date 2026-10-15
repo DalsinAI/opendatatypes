@@ -7,7 +7,8 @@
 #   datatypes.library      the replacement (its class is "datatypesclass")
 #   opendatatypes.library  the same under its own name, for the ABI test
 #                          (its class is "opendatatypesclass")
-#   AddDataTypes           OpenDatatypes' AddDataTypes command
+#   AddDataTypes           OpenBench's AddDataTypes (commands/adddatatypes),
+#                          which talks to OpenDatatypes' private call
 #   DatatypesABITest       runs the same calls through OS 3.2's library and
 #                          ours and lists every difference
 # and sys/datatypes.catalog's descriptor stays in catalogs/datatypes.cd.
@@ -42,8 +43,8 @@ for lib in datatypes opendatatypes; do
     [ -z "$und" ] || { echo "undefined in $lib.library: $und" >&2; exit 1; }
 done
 
-"$CC" -m68000 -O2 -std=gnu99 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-unused-parameter \
-  -noixemul -o "$OUT/c/AddDataTypes" "$HERE/tools/AddDataTypes.c"
+STOVE="$STOVE" OUT="$OUT/commands" sh "$HERE/../../commands/build-amiga.sh" adddatatypes
+cp "$OUT/commands/C/adddatatypes" "$OUT/c/AddDataTypes"
 echo "$OUT/c/AddDataTypes ($(wc -c < "$OUT/c/AddDataTypes") bytes)"
 
 "$CC" -m68000 -O2 -std=gnu99 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format \
