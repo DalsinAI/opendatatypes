@@ -148,10 +148,10 @@ or open ("ABI test": `DatatypesABITest OBJ` has the PROBE line).
   ABI test's OBJ part are built only with the os32-gcc16 stove, which the
   cloud hasn't got (syntax was checked here against stand-in headers).
 - The private slots' places (-120 to -156) and the -252 call wait on the
-  OBJ probe; if OS 3.2 keeps something else there, they move. Which
-  private slot OS 3.2.3's own AddDataTypes calls, and with what, is
-  `obspy`'s to measure (`commands/tests/WAVE3.md`); once it has, ours
-  takes the same call and OpenBench's AddDataTypes works with both.
+  OBJ probe; if OS 3.2 keeps something else there, they move. OS 3.2.3's
+  own AddDataTypes calls no slot at all (`obtrace`, `commands/tests/WAVE3.md`),
+  so -252 stays ours: OpenBench's AddDataTypes works with this library
+  only.
 - OS 3.2's own C:AddDataTypes doesn't work with ours (it uses the library's
   private list, whose layout isn't measured); ours doesn't work with OS 3.2's
   library.
