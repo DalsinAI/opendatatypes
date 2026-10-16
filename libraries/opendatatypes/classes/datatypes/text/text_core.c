@@ -1,5 +1,5 @@
 /* OpenDatatypes text.datatype core.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  * Clean-room; see text_core.h for what this is written from.
  */
 #include "text_core.h"

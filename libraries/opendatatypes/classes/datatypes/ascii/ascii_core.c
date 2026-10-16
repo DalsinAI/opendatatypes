@@ -1,5 +1,5 @@
 /* OpenDatatypes ascii.datatype core.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  * Clean-room; see ascii_core.h for what this is written from.
  */
 #include "ascii_core.h"

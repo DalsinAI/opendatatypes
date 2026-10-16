@@ -1,6 +1,6 @@
 /* OpenDatatypes: an open anim.datatype for AmigaOS 3.2, API and ABI
  * compatible.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Clean-room: written from the IFF ANIM and ILBM specifications (EA's
  * public documents), the animation_dtc autodoc and OS 3.2's answers
@@ -27,7 +27,7 @@
 #endif
 #define DTC_DISPATCH anm_dispatch
 #define DTC_INST_SIZE anm_inst_size
-#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenDatatypes, DalsinAI\r\n"
+#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenDatatypes, AmigaChrome Team\r\n"
 #define DTC_EXT_INIT anim_ext_init
 #define ADT_EXT_BITMAPS_ONLY
 
@@ -38,7 +38,7 @@ static int anim_ext_init(struct DTCBase *base);
 #include "../animation/adt_ext_amiga.h"
 
 static const char ver[] __attribute__((used)) =
-    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenDatatypes, DalsinAI";
+    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenDatatypes, AmigaChrome Team";
 
 /* a subclass only makes and frees its frames' bitmaps */
 static const struct adt_ext anim_ext = { .alloc_bitmap = ax_alloc_bitmap, .free_bitmap = ax_free_bitmap };

@@ -1,5 +1,5 @@
 /* OpenPicture: an open picture.datatype for AmigaOS 3.2, API and ABI compatible.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Clean-room: written from the autodocs, the NDK 3.2 headers and the IFF
  * specifications, never from Kickstart's, Hyperion's or AROS's code or
@@ -19,13 +19,13 @@
 #define DTC_SUPER "datatypesclass"
 #define DTC_DISPATCH pic_dispatch
 #define DTC_INST_SIZE pic_inst_size
-#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenPicture, DalsinAI\r\n"
+#define DTC_IDSTRING LIBNAME " 47.100 (13.10.2026) OpenPicture, AmigaChrome Team\r\n"
 #define DTC_NEED_GFX
 
 #include "picture_core.h"
 #include "../picture/dtc_shell.h"
 
 static const char ver[] __attribute__((used)) =
-    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenPicture, DalsinAI";
+    "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenPicture, AmigaChrome Team";
 
 DTC_ROMTAG;

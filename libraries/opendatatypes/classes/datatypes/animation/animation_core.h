@@ -1,5 +1,5 @@
 /* OpenDatatypes animation.datatype core, in plain C with no Amiga headers.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Clean-room, from the animation_dtc autodoc, NDK 3.2's
  * datatypes/animationclass.h, pictureclass.h and soundclass.h, and OS

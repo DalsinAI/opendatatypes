@@ -1,5 +1,5 @@
 /* OpenILBM: ilbm.datatype's class, lean C++ with no Amiga headers.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Clean-room, from the IFF ILBM specification and its updates (EA and
  * Commodore, public), the picture_dtc and datatypes autodocs and the NDK

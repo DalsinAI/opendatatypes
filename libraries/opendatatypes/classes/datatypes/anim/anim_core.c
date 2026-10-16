@@ -1,5 +1,5 @@
 /* OpenDatatypes anim.datatype core: IFF ANIM files.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  * Clean-room; see anim_core.h for what this is written from.
  */
 #include "anim_core.h"

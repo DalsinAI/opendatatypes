@@ -1,6 +1,6 @@
 /* OpenDatatypes core: descriptors, recognition, method tables, tools and
  * strings. See dt_core.h.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Every choice the autodocs leave open is marked "OS 3.2:" when measured by
  * tests/DatatypesABITest's probe, and "guess:" until it has been.

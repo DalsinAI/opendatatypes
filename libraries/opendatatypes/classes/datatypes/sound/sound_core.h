@@ -1,6 +1,6 @@
 /* OpenSound: sound.datatype's class (V44 attributes and up) as a core with
  * no Amiga headers, over struct odt_cenv and struct dtc_ext.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Clean-room, from the sound_dtc autodoc, datatypes/soundclass.h's
  * published layouts (NDK 3.2), the audio.device autodoc and OS 3.2's

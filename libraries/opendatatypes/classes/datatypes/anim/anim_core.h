@@ -1,6 +1,6 @@
 /* OpenDatatypes anim.datatype core: IFF ANIM files, in plain C with no
  * Amiga headers.
- * Copyright (c) 2026 DalsinAI. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Clean-room, from the public IFF ANIM specification (Electronic Arts'
  * and Sparta's ANIM documents: ANHD, DLTA, the compression methods 0, 5,
