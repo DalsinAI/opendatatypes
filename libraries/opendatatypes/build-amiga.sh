@@ -25,11 +25,11 @@ FD=${FD:-$(find "$P" -name datatypes_lib.fd 2>/dev/null | head -1)}
 [ -n "$FD" ] || { echo "no datatypes_lib.fd under $P: set FD=" >&2; exit 1; }
 python3 "$HERE/../common/check_fd.py" "$FD" "$HERE/datatypes.lvo"
 
-"$CC" -m68000 -O2 -std=gnu99 -fno-builtin -Wall -Wextra -Werror -I"$HERE" -c "$HERE/ndk_check.c" \
+"$CC" -m68040 -O2 -std=gnu99 -fno-builtin -Wall -Wextra -Werror -I"$HERE" -c "$HERE/ndk_check.c" \
   -o "$OUT/ndk_check.o"
 echo "ndk_check: every constant and layout matches NDK 3.2"
 
-LIBFLAGS="-m68000 -O2 -std=gnu99 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-toplevel-reorder
+LIBFLAGS="-m68040 -O2 -std=gnu99 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-toplevel-reorder
   -fno-lto -fno-builtin -fno-tree-loop-distribute-patterns -Wall -Wextra -Werror
   -Wno-unused-parameter -nostartfiles -nostdlib"
 for lib in datatypes opendatatypes; do
@@ -47,7 +47,7 @@ STOVE="$STOVE" OUT="$OUT/commands" sh "$HERE/../../commands/build-amiga.sh" addd
 cp "$OUT/commands/C/adddatatypes" "$OUT/c/AddDataTypes"
 echo "$OUT/c/AddDataTypes ($(wc -c < "$OUT/c/AddDataTypes") bytes)"
 
-"$CC" -m68000 -O2 -std=gnu99 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format \
+"$CC" -m68040 -O2 -std=gnu99 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format \
   -noixemul -o "$OUT/tests/DatatypesABITest" "$HERE/tests/DatatypesABITest.c"
 echo "$OUT/tests/DatatypesABITest ($(wc -c < "$OUT/tests/DatatypesABITest") bytes)"
 sha256sum "$OUT"/libs/* "$OUT/c/AddDataTypes" "$OUT/tests/DatatypesABITest"

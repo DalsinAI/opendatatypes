@@ -24,9 +24,9 @@ NM=${NM:-"$P/bin/m68k-amigaos-nm"}
 OUT=${OUT:-"$HERE/build-amiga"}
 mkdir -p "$OUT/datatypes" "$OUT/tests" "$OUT/obj"
 
-"$CC" -m68000 -fsyntax-only -Wall -Wextra -Werror -I"$FAMILY" "$FAMILY/ndk_check.c"
+"$CC" -m68040 -fsyntax-only -Wall -Wextra -Werror -I"$FAMILY" "$FAMILY/ndk_check.c"
 
-CXXFLAGS="-m68000 -O2 -std=gnu++23 -fno-exceptions -fno-rtti -fno-threadsafe-statics
+CXXFLAGS="-m68040 -O2 -std=gnu++23 -fno-exceptions -fno-rtti -fno-threadsafe-statics
   -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdlib++
   -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-lto -fno-builtin
   -fno-tree-loop-distribute-patterns -Wall -Wextra -Werror"
@@ -40,7 +40,7 @@ und=$("$NM" -u "$OUT/obj/${CORE}_core.o" | awk '{print $NF}' |
       grep -v '^_*\(mul\|div\|udiv\|mod\|umod\)[sd]i3$' || true)
 [ -z "$und" ] || { echo "the core calls $und" >&2; exit 1; }
 
-LIBFLAGS="-m68000 -O2 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-toplevel-reorder
+LIBFLAGS="-m68040 -O2 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-toplevel-reorder
   -fno-lto -fno-builtin -fno-tree-loop-distribute-patterns -Wall -Wextra -Werror
   -Wno-unused-parameter -Wno-unused-function -nostartfiles -nostdlib"
 SHELLSRC=$(ls "$HERE"/open*_dtclass.c)
@@ -55,7 +55,7 @@ for name in "$FILE" "open$FILE"; do
   [ -z "$und" ] || { echo "undefined in $name: $und" >&2; exit 1; }
 done
 
-"$CC" -m68000 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul \
+"$CC" -m68040 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul \
   -o "$OUT/tests/$TEST" "$HERE/tests/$TEST.c"
 echo "$OUT/tests/$TEST ($(wc -c < "$OUT/tests/$TEST") bytes)"
 sha256sum "$OUT"/datatypes/* "$OUT/tests/$TEST" 2>/dev/null || true

@@ -3,7 +3,7 @@
 # OpenDatatypes' picture and sound classes (libraries/opendatatypes/classes/
 # datatypes: picture.datatype, ilbm.datatype, sound.datatype, 8svx.datatype):
 # each core is lean C++ (no exceptions, no RTTI, no libstdc++), built with
-# an m68k cross G++ at -O0 and -O2 for the 68000, 68020 and 68040; checked
+# an m68k cross G++ at -O0 and -O2 for the 68040; checked
 # with nm to call nothing but libgcc's arithmetic (the system comes in
 # through struct odt_cenv and struct dtc_ext) and to hold no C++ runtime
 # (__cxa_*, __gxx_personality*, typeinfo, vtables, static constructors,
@@ -31,7 +31,7 @@ python3 -I "$here/opendatatypes_picsound_ref.py" "$tmp" "${SEED:-4310}"
 CORES="picture/picture ilbm/ilbm sound/sound 8svx/svx"
 LEAN="-std=gnu++23 -fno-exceptions -fno-rtti -fno-threadsafe-statics
   -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdlib++"
-for build in "-O0 -m68000" "-O2 -m68000" "-O0 -m68020" "-O2 -m68020" "-O0 -m68040" "-O2 -m68040"; do
+for build in "-O0 -m68040" "-O2 -m68040"; do
     set -- $build
     opt=$1 cpu=$2
     objs=

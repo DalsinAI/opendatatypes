@@ -26,9 +26,9 @@ NM=${NM:-"$P/bin/m68k-amigaos-nm"}
 OUT=${OUT:-"$DIR/build-amiga"}
 mkdir -p "$OUT/datatypes" "$OUT/tests" "$OUT/obj"
 
-COREFLAGS="-m68000 -O2 -std=gnu99 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-lto -fno-builtin
+COREFLAGS="-m68040 -O2 -std=gnu99 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-lto -fno-builtin
   -fno-tree-loop-distribute-patterns -Wall -Wextra -Werror"
-LIBFLAGS="-m68000 -O2 -std=gnu99 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-toplevel-reorder
+LIBFLAGS="-m68040 -O2 -std=gnu99 -fno-delete-null-pointer-checks -fomit-frame-pointer -fno-toplevel-reorder
   -fno-lto -fno-builtin -fno-tree-loop-distribute-patterns -Wall -Wextra -Werror
   -Wno-unused-parameter -Wno-unused-function -nostartfiles -nostdlib"
 
@@ -55,7 +55,7 @@ for NAME in "$@"; do
   done
 done
 
-"$CC" -m68000 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul \
+"$CC" -m68040 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul \
   -I"$DIR" -o "$OUT/tests/$TEST" "$DIR/$first/tests/$TEST.c"
 echo "$OUT/tests/$TEST ($(wc -c < "$OUT/tests/$TEST") bytes)"
 sha256sum "$OUT"/datatypes/* "$OUT/tests/$TEST"

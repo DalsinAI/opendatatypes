@@ -2,7 +2,7 @@
 # OpenDatatypes' text.datatype, ascii.datatype, animation.datatype and
 # anim.datatype (libraries/opendatatypes/classes/datatypes/): each core
 # is plain C with no Amiga headers, built with an m68k cross GCC at -O0
-# and -O2 for the 68000, 68020 and 68040; checked with nm to call nothing
+# and -O2 for the 68040; checked with nm to call nothing
 # but libgcc's arithmetic (everything else comes through the env), to
 # keep no data of its own and to hold no C++ runtime; then run under
 # qemu-m68k on a script python3 writes at test time
@@ -27,7 +27,7 @@ mkdir "$tmp/files"
 python3 -I "$here/opendatatypes_textanim_ref.py" "$tmp/files" "$tmp/script.txt" "$tmp/expected.txt" "${SEED:-2026}"
 
 CORES="text/text_core ascii/ascii_core animation/animation_core anim/anim_core"
-for build in "-O0 -m68000" "-O2 -m68000" "-O0 -m68020" "-O2 -m68020" "-O0 -m68040" "-O2 -m68040"; do
+for build in "-O0 -m68040" "-O2 -m68040"; do
     set -- $build
     opt=$1 cpu=$2
     objs=

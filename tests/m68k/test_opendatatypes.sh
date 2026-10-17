@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright (c) 2026 AmigaChrome Team. MIT licence (see LICENSE at the repository root).
 # OpenDatatypes (datatypes.library) core: libraries/opendatatypes/dt_core.c,
-# built with an m68k cross GCC at -O0 and -O2 for the 68000 and 68040,
+# built with an m68k cross GCC at -O0 and -O2 for the 68040,
 # checked to call nothing but libgcc, and run under qemu-m68k against
 # tests/m68k/opendatatypes_test.c.
 #   sh tests/m68k/test_opendatatypes.sh
@@ -15,7 +15,7 @@ command -v "$cc" >/dev/null || { echo "skipped: no $cc"; exit 0; }
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 fail=0
 
-for build in "-O0 -m68000" "-O2 -m68000" "-O0 -m68040" "-O2 -m68040"; do
+for build in "-O0 -m68040" "-O2 -m68040"; do
     set -- $build
     opt=$1 cpu=$2
     # shellcheck disable=SC2086

@@ -29,7 +29,7 @@ fail=0
 python3 -I "$here/opendatatypes_class_ref.py" "$tmp/script.txt" "$tmp/expected.txt" "${SEED:-3210}" \
     "$lib/catalogs/datatypes.cd"
 
-for build in "-O0 -m68000" "-O2 -m68000" "-O0 -m68020" "-O2 -m68020" "-O0 -m68040" "-O2 -m68040"; do
+for build in "-O0 -m68040" "-O2 -m68040"; do
     set -- $build
     opt=$1 cpu=$2
     for c in dtclass_core dt_core; do
