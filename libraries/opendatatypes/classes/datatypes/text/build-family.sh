@@ -16,6 +16,7 @@
 # The cores are plain C (as datatypes.library's are); the core calls
 # nothing but libgcc, checked with nm.
 set -eu
+SOFT040="-specs=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/../../../../../build/m68k-soft-m68040.specs"   # the 68040 soft-float link (build/m68k-soft-m68040.specs)
 
 DIR=$1 TEST=$2
 shift 2
@@ -55,7 +56,7 @@ for NAME in "$@"; do
   done
 done
 
-"$CC" -m68040 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul \
+"$CC" -m68040 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul $SOFT040 \
   -I"$DIR" -o "$OUT/tests/$TEST" "$DIR/$first/tests/$TEST.c"
 echo "$OUT/tests/$TEST ($(wc -c < "$OUT/tests/$TEST") bytes)"
 sha256sum "$OUT"/datatypes/* "$OUT/tests/$TEST"

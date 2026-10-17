@@ -13,6 +13,7 @@
 # library profile); the shell, open<name>_dtclass.c, is C. The class
 # libraries have no fd in the NDK: <name>.lvo documents their one call.
 set -eu
+SOFT040="-specs=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/../../../../../build/m68k-soft-m68040.specs"   # the 68040 soft-float link (build/m68k-soft-m68040.specs)
 
 HERE=$1 CORE=$2 FILE=$3 TEST=$4
 FAMILY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -55,7 +56,7 @@ for name in "$FILE" "open$FILE"; do
   [ -z "$und" ] || { echo "undefined in $name: $und" >&2; exit 1; }
 done
 
-"$CC" -m68040 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul \
+"$CC" -m68040 -O2 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format -noixemul $SOFT040 \
   -o "$OUT/tests/$TEST" "$HERE/tests/$TEST.c"
 echo "$OUT/tests/$TEST ($(wc -c < "$OUT/tests/$TEST") bytes)"
 sha256sum "$OUT"/datatypes/* "$OUT/tests/$TEST" 2>/dev/null || true

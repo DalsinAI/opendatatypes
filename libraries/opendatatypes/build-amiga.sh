@@ -13,6 +13,7 @@
 #                          ours and lists every difference
 # and sys/datatypes.catalog's descriptor stays in catalogs/datatypes.cd.
 set -eu
+SOFT040="-specs=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/../../build/m68k-soft-m68040.specs"   # the 68040 soft-float link (build/m68k-soft-m68040.specs)
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 STOVE=${STOVE:-"$HOME/AmigaChrome/stoves/os32-gcc16"}
@@ -48,6 +49,6 @@ cp "$OUT/commands/C/adddatatypes" "$OUT/c/AddDataTypes"
 echo "$OUT/c/AddDataTypes ($(wc -c < "$OUT/c/AddDataTypes") bytes)"
 
 "$CC" -m68040 -O2 -std=gnu99 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format \
-  -noixemul -o "$OUT/tests/DatatypesABITest" "$HERE/tests/DatatypesABITest.c"
+  -noixemul $SOFT040 -o "$OUT/tests/DatatypesABITest" "$HERE/tests/DatatypesABITest.c"
 echo "$OUT/tests/DatatypesABITest ($(wc -c < "$OUT/tests/DatatypesABITest") bytes)"
 sha256sum "$OUT"/libs/* "$OUT/c/AddDataTypes" "$OUT/tests/DatatypesABITest"
