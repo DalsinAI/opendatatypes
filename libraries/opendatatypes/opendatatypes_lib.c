@@ -57,6 +57,7 @@
 #include <devices/clipboard.h>
 #include <workbench/workbench.h>
 #include <workbench/icon.h>
+#include "../../common/include/oa_protos_begin.h"   /* the protos' unused varargs wrappers dropped */
 #include <proto/intuition.h>
 #include <proto/graphics.h>
 #include <proto/locale.h>
@@ -66,6 +67,7 @@
 #include <proto/dos.h>
 #include <proto/utility.h>
 #include <proto/iffparse.h>
+#include "../../common/include/oa_protos_end.h"
 
 #include "dt_core.h"
 #include "dtclass_env.h"
