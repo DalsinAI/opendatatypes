@@ -30,6 +30,7 @@
 #include <proto/dos.h>
 #include <proto/intuition.h>
 #include <proto/datatypes.h>
+#include <clib/alib_protos.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -64,7 +65,7 @@ static void path_of(char *buf, ULONG size, const char *name)
     AddPart((STRPTR)buf, (CONST_STRPTR)name, size);
 }
 
-static int write_file(const char *name, const UBYTE *data, ULONG len)
+static __attribute__((unused)) int write_file(const char *name, const UBYTE *data, ULONG len)
 {
     char p[256];
     BPTR fh;
@@ -78,7 +79,7 @@ static int write_file(const char *name, const UBYTE *data, ULONG len)
 
 /* An object of the class under test, of a file the test wrote: the type
  * recognised by OS 3.2's datatypes.library, the class given by name */
-static Object *new_file_obj(const char *cls, const char *name, struct TagItem *more)
+static __attribute__((unused)) Object *new_file_obj(const char *cls, const char *name, struct TagItem *more)
 {
     char p[256];
     BPTR lock;
@@ -100,7 +101,7 @@ static Object *new_file_obj(const char *cls, const char *name, struct TagItem *m
     return o;
 }
 
-static Object *new_ram_obj(const char *cls, struct TagItem *more)
+static __attribute__((unused)) Object *new_ram_obj(const char *cls, struct TagItem *more)
 {
     struct TagItem t[2];
     t[0].ti_Tag = DTA_SourceType; t[0].ti_Data = DTST_RAM;
@@ -190,14 +191,14 @@ static int dtc_main(int argc, char **argv)
 
 struct iffw { UBYTE buf[16384]; ULONG len, chunk; };
 
-static void iff_begin(struct iffw *w, const char *type)
+static __attribute__((unused)) void iff_begin(struct iffw *w, const char *type)
 {
     w->len = 12;
     memcpy(w->buf, "FORM", 4);
     memcpy(w->buf + 8, type, 4);
 }
 static void put32(UBYTE *p, ULONG v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
-static void iff_chunk(struct iffw *w, const char *id, const void *data, ULONG n)
+static __attribute__((unused)) void iff_chunk(struct iffw *w, const char *id, const void *data, ULONG n)
 {
     if (w->len + 8 + n + 1 > sizeof w->buf) return;
     memcpy(w->buf + w->len, id, 4);
@@ -206,6 +207,6 @@ static void iff_chunk(struct iffw *w, const char *id, const void *data, ULONG n)
     w->len += 8 + n;
     if (n & 1) w->buf[w->len++] = 0;
 }
-static void iff_end(struct iffw *w) { put32(w->buf + 4, w->len - 8); }
+static __attribute__((unused)) void iff_end(struct iffw *w) { put32(w->buf + 4, w->len - 8); }
 
 #endif

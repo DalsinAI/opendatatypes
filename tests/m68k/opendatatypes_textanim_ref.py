@@ -1230,7 +1230,7 @@ def expect_tclass(wrap, text):
     out.append("write 99 " + chunk_form_ftxt(copy_text(lay, True)).hex())
     out.append("write iff -> 1")
     word = word_at(lay, 3, 0, 128)
-    out.append("notify %x='%s'" % (304, word.decode("latin-1")))
+    out.append("notify %x='%s'" % (303, word.decode("latin-1")))
     out.append("wordselect '%s'" % word.decode("latin-1"))
     out.append("set -> 1 buflen 3")
     lay2 = layout(b"x y", box[2] if wrap else 0)

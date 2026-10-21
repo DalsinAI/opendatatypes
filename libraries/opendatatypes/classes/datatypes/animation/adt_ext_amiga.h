@@ -20,6 +20,7 @@
 #include <dos/dostags.h>
 #include <exec/ports.h>
 #include <exec/io.h>
+#include <datatypes/animationclass.h>
 #include "animation_core.h"
 
 _Static_assert(sizeof(struct BitMap) == sizeof(struct adt_BitMap), "BitMap");

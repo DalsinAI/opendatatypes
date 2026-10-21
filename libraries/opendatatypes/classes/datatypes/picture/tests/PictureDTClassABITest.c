@@ -17,6 +17,29 @@
 #include <graphics/gfx.h>
 #include <proto/graphics.h>
 
+/* NDK 3.2's datatypes_lib.fd keeps ObtainDTDrawInfoA and ReleaseDTDrawInfo
+ * private, so neither NDK's proto has them: called at their V44 LVOs */
+static APTR ObtainDTDrawInfoA(Object *o, struct TagItem *attrs)
+{
+    register ULONG d0 __asm("d0");
+    register ULONG d1 __asm("d1");
+    register Object *a0 __asm("a0") = o;
+    register struct TagItem *a1 __asm("a1") = attrs;
+    register struct Library *a6 __asm("a6") = DataTypesBase;
+    __asm__ __volatile__("jsr -120(%%a6)" : "=r"(d0), "=r"(d1), "+r"(a0), "+r"(a1) : "r"(a6) : "cc", "memory");
+    return (APTR)d0;
+}
+
+static void ReleaseDTDrawInfo(Object *o, APTR handle)
+{
+    register ULONG d0 __asm("d0");
+    register ULONG d1 __asm("d1");
+    register Object *a0 __asm("a0") = o;
+    register APTR a1 __asm("a1") = handle;
+    register struct Library *a6 __asm("a6") = DataTypesBase;
+    __asm__ __volatile__("jsr -132(%%a6)" : "=r"(d0), "=r"(d1), "+r"(a0), "+r"(a1) : "r"(a6) : "cc", "memory");
+}
+
 #ifndef PDTM_WRITEPIXELARRAY
 #define PDTM_WRITEPIXELARRAY (PDTM_Dummy + 0)
 #define PDTM_READPIXELARRAY (PDTM_Dummy + 1)

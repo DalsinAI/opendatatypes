@@ -23,7 +23,7 @@
 /* ---- datatypes/textclass.h ------------------------------------------------- */
 
 #define TDT_TEXTDTCLASS "text.datatype"
-#define TDT_TDTA_Dummy      (ODT_DTA_Dummy + 300)
+#define TDT_TDTA_Dummy      (ODT_DTA_Dummy + 299)   /* TDTA_Buffer is DTA_Dummy + 300 */
 #define TDT_TDTA_Buffer     (TDT_TDTA_Dummy + 1)
 #define TDT_TDTA_BufferLen  (TDT_TDTA_Dummy + 2)
 #define TDT_TDTA_LineList   (TDT_TDTA_Dummy + 3)

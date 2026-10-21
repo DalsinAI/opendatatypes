@@ -30,6 +30,7 @@
 #include <proto/intuition.h>
 #include <proto/graphics.h>
 #include <proto/datatypes.h>
+#include <clib/alib_protos.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>

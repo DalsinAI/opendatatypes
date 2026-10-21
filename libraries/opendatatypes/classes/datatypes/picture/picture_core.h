@@ -18,7 +18,7 @@ extern "C" {
 
 /* ---- datatypes/pictureclass.h -------------------------------------------------- */
 
-#define PIC_PDTA_Dummy           (ODT_DTA_Dummy + 200)
+#define PIC_PDTA_Dummy           (ODT_DTA_Dummy + 199)   /* PDTA_ModeID is DTA_Dummy + 200 */
 #define PIC_PDTA_ModeID          (PIC_PDTA_Dummy + 1)
 #define PIC_PDTA_BitMapHeader    (PIC_PDTA_Dummy + 2)
 #define PIC_PDTA_BitMap          (PIC_PDTA_Dummy + 3)

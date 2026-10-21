@@ -31,6 +31,7 @@ struct DTCBase;
 static int text_ext_init(struct DTCBase *base);
 #include "dtc_shell.h"
 #include <proto/diskfont.h>
+#include <proto/layers.h>
 
 static const char ver[] __attribute__((used)) =
     "\0$VER: " LIBNAME " 47.100 (13.10.2026) OpenDatatypes, AmigaChrome Team";

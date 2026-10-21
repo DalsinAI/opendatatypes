@@ -27,6 +27,7 @@
 #include <proto/dos.h>
 #include <proto/intuition.h>
 #include <proto/datatypes.h>
+#include <clib/alib_protos.h>
 #include <proto/iffparse.h>
 #include <proto/utility.h>
 #include <stdarg.h>

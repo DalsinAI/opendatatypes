@@ -79,8 +79,8 @@ static void dump(const char *cls, const struct svx_spec *s)
     }
     v = (struct VoiceHeader *)get1(o, SDTA_VoiceHeader);
     len = get1(o, SDTA_SampleLength);
-    out("%s vh %lu %lu %u %u %lu", s->name, v->vhdr_OneShotHiSamples, v->vhdr_RepeatHiSamples, v->vhdr_SamplesPerSec,
-        v->vhdr_Compression, v->vhdr_Volume);
+    out("%s vh %lu %lu %u %u %lu", s->name, v->vh_OneShotHiSamples, v->vh_RepeatHiSamples, v->vh_SamplesPerSec,
+        v->vh_Compression, v->vh_Volume);
     probe("%s len %lu rate %lu period %lu volume %lu cycles %lu pan %lx", s->name, len, get1(o, SDTA_SamplesPerSec),
           get1(o, SDTA_Period), get1(o, SDTA_Volume), get1(o, SDTA_Cycles), get1(o, SDTA_Pan));
     for (ch = 0; ch < 2; ch++) {
