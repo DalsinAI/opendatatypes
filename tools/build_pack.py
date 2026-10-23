@@ -21,9 +21,16 @@ what the builds made, so a new datatype needs no change to this file.
     Devs/DataTypes/                   their descriptors
     Library/Libs/datatypes.library    the library, and its system classes in
     Library/Classes/DataTypes/        Library/Classes/DataTypes
+    Libs/z.library                    OpenZlib, for gzip and openpng's PNG writing
   build/pack/OpenDatatypes.info       the drawer's icon
   build/pack/OpenDatatypes.json       what is in it, for OpenUp's OpenImage part
   build/pack/OpenDatatypes-<version>.lha   with --lha (jlha or lha on PATH)
+
+z.library is the Team's OpenZlib (amigachrome-guest libraries/openzlib), built
+from a checkout of it (AMIGACHROME_GUEST or GUEST, else beside this one) and
+installed whenever a datatype that opens it is: the user, 23 October 2026,
+"OpenZlib as z.library". Without a checkout the pack has none, and the
+Installer says what needs one.
 
 Each datatype is one choice in the Installer, named by its class: a class's
 descriptors are the files in Devs/DataTypes whose DTHD base name is that
@@ -86,6 +93,9 @@ LABELS = {
 ORDER = ["openpng", "opentga", "webp", "openpicture", "opensound", "openmodule",
          "webm", "openvideo", "cdxl", "opendoc"]
 PAGE = 9            # the 3.2 Installer shows nine choices a page (OpenUp, 8 October 2026)
+# The datatypes that open z.library (Datatypes/README.md): the pack brings the Team's own, OpenZlib, and
+# installs it with them (the user, 23 October 2026: OpenZlib is the z.library).
+ZLIB_USERS = ("gzip.datatype", "openpng.datatype")
 
 STORE = "SYS:Storage/OpenDatatypes"
 DEST = {"Classes": "SYS:Classes/DataTypes", "Devs": "DEVS:DataTypes", "Libs": "LIBS:"}
@@ -101,7 +111,16 @@ def run(cmd: list, env: dict | None = None, cwd: Path | None = None) -> None:
     subprocess.run([str(c) for c in cmd], check=True, env=env, cwd=cwd)
 
 
-def build(lib_out: Path) -> None:
+def guest_checkout() -> Path | None:
+    """amigachrome-guest, for OpenZlib: AMIGACHROME_GUEST or GUEST, else beside this repository."""
+    for p in (os.environ.get("AMIGACHROME_GUEST"), os.environ.get("GUEST"),
+              ROOT.parent / "amigachrome-guest", ROOT.parent / "guest"):
+        if p and (Path(p) / "libraries/openzlib/build-amiga.sh").is_file():
+            return Path(p)
+    return None
+
+
+def build(lib_out: Path, zlib_out: Path) -> None:
     env = dict(os.environ)
     run(["sh", ROOT / "Datatypes/build.sh"], env=env)
     if LIBDIR.is_dir():
@@ -109,6 +128,12 @@ def build(lib_out: Path) -> None:
         run(["sh", LIBDIR / "build-amiga.sh"], env=env)
         for family in SYSTEM_CLASSES:
             run(["sh", LIBDIR / "classes/datatypes" / family / "build-amiga.sh"], env=env)
+    # z.library: OpenZlib (amigachrome-guest libraries/openzlib), with its own script and stove, as OpenUp builds it
+    g = guest_checkout()
+    if g:
+        run(["sh", g / "libraries/openzlib/build-amiga.sh"], env=dict(os.environ, OUT=str(zlib_out)))
+    else:
+        print("build_pack: no amigachrome-guest checkout (AMIGACHROME_GUEST): the pack has no z.library")
 
 
 def base_name(descriptor: bytes) -> str:
@@ -136,9 +161,10 @@ def version_string(data: bytes) -> str:
     return data[i + 6:j].decode("latin-1")
 
 
-def collect(dt_out: Path, lib_out: Path) -> tuple[list[dict], list[dict], dict | None]:
+def collect(dt_out: Path, lib_out: Path, zlib_out: Path) -> tuple[list[dict], list[dict], dict | None, dict | None]:
     """The choices (one a class, with its descriptors), the classes every install takes,
-    and the library choice (None when the library wasn't built)."""
+    the library choice (None when the library wasn't built) and z.library (None when it wasn't
+    built, or no datatype here opens it)."""
     classes = {p.name: p for p in sorted((dt_out / "Classes/DataTypes").glob("*.datatype"))}
     if not classes:
         sys.exit(f"build_pack: no datatypes in {dt_out / 'Classes/DataTypes'}: build them first")
@@ -170,7 +196,13 @@ def collect(dt_out: Path, lib_out: Path) -> tuple[list[dict], list[dict], dict |
                 files.append({"pack": f"Library/Classes/DataTypes/{name}", "tag": "Classes", "name": name, "src": p})
         library = {"label": "datatypes.library and the system classes", "files": files,
                    "version": version_string(lib.read_bytes())}
-    return choices, always, library
+    zlib = None
+    z = zlib_out / "libs/z.library"
+    users = [n for n in ZLIB_USERS if n in classes]
+    if z.is_file() and users:
+        zlib = {"label": "z.library (OpenZlib)", "for": users, "version": version_string(z.read_bytes()),
+                "files": [{"pack": "Libs/z.library", "tag": "Libs", "name": "z.library", "src": z}]}
+    return choices, always, library, zlib
 
 
 # ---------------------------------------------------------------- the Installer scripts
@@ -250,7 +282,8 @@ def library_version(library: dict) -> str:
     return " " + v[1] if len(v) > 1 else ""
 
 
-def install_script(version: str, date: str, choices: list, always: list, library: dict | None) -> str:
+def install_script(version: str, date: str, choices: list, always: list, library: dict | None,
+                   zlib: dict | None = None) -> str:
     n = len(choices) + len(always) + (1 if library else 0)
     out = [f"""; $VER: Install-OpenDatatypes {version} ({date})
 ; OpenDatatypes' Installer script (the Commodore Installer of AmigaOS 3.2).
@@ -273,6 +306,7 @@ def install_script(version: str, date: str, choices: list, always: list, library
 (if (<> #cpu "68040")
     (abort (cat "OpenDatatypes is built for a 68040 or 68060. This Amiga has a " #cpu ".")))
 
+(set #zrestart 0)
 (welcome (cat "This installs OpenDatatypes " #version ": the AmigaChrome Team's datatypes, "
               "so every program that uses datatypes opens today's pictures, sounds, films and documents."))
 (message (cat "Nothing is deleted: a file OpenDatatypes replaces is kept in {STORE}/Superseded, "
@@ -283,7 +317,7 @@ def install_script(version: str, date: str, choices: list, always: list, library
     # What some datatypes need that the pack doesn't carry (Datatypes/README.md): said before the
     # choices, only when this Amiga lacks it, so nobody is left wondering why one doesn't work.
     classes = {c["class"] for c in choices + always}
-    zneed = [n for n in ("gzip.datatype", "openpng.datatype") if n in classes]
+    zneed = [] if zlib else [n for n in ZLIB_USERS if n in classes]
     sneed = [n for n in ("openpicture.datatype", "opensound.datatype", "opendoc.datatype", "openvideo.datatype")
              if n in classes]
     if zneed or sneed:
@@ -341,18 +375,40 @@ def install_script(version: str, date: str, choices: list, always: list, library
         for f in library["files"]:
             out.append(file_lines(f, "P_PUT", "        "))
         out.append("    )\n)\n")
+    if zlib:
+        # with the datatypes that open it: any z.library already there is kept, and Uninstall puts it back
+        tests = []
+        for k, page in enumerate(pages, 1):
+            for bit, c in enumerate(page):
+                if c["class"] in zlib["for"]:
+                    tests.append(f"(bitand #sel{k} {1 << bit})")
+        if any(c["class"] in zlib["for"] for c in always):
+            tests = ["1"]
+        cond = tests[0]
+        for t in tests[1:]:
+            cond = f"(or {cond} {t})"
+        out.append(f"""; z.library, the Team's OpenZlib, for {" and ".join(zlib["for"])}
+(if {cond}
+    (
+        (if (= (exists "LIBS:z.library" (noreq)) 1)
+            (if (= (exists (tackon (tackon #ins "Libs") "z.library") (noreq)) 0) (set #zrestart 1)))
+{file_lines(zlib["files"][0], "P_PUT", "        ")}    )
+)
+""")
     out.append(f"""
 (copyfiles (source "Uninstall-OpenDatatypes") (dest #store) (infos) (nogauge) (optional "force"))
 (run "C:AddDataTypes REFRESH QUIET >NIL:")
 (complete 100)
 (exit (cat "OpenDatatypes " #version " is installed. "
            {"(if #lib " + q("Restart the Amiga to use the new datatypes.library. ") + ' "")' if library else '""'}
+           {"(if #zrestart " + q("Restart the Amiga so every program uses OpenZlib's z.library. ") + ' "")' if zlib else '""'}
            "To take it out, run Uninstall-OpenDatatypes in {STORE}."))
 """)
     return "".join(out)
 
 
-def uninstall_script(version: str, date: str, choices: list, always: list, library: dict | None) -> str:
+def uninstall_script(version: str, date: str, choices: list, always: list, library: dict | None,
+                     zlib: dict | None = None) -> str:
     out = [f"""; $VER: Uninstall-OpenDatatypes {version} ({date})
 ; Takes OpenDatatypes off this Amiga: each file it installed (it has a mark in
 ; {STORE}/Installed) goes, and what it replaced comes back from
@@ -378,6 +434,8 @@ def uninstall_script(version: str, date: str, choices: list, always: list, libra
         out.append("; datatypes.library and the system classes\n")
         for f in library["files"]:
             out.append(file_lines(f, "P_TAKE", ""))
+    if zlib:
+        out.append("; z.library (OpenZlib)\n" + file_lines(zlib["files"][0], "P_TAKE", ""))
     out.append(f"""
 ; The folders, once empty, and this script
 (delete (tackon #ins "Classes") (optional "nofail"))
@@ -394,7 +452,7 @@ def uninstall_script(version: str, date: str, choices: list, always: list, libra
 (run "C:AddDataTypes REFRESH QUIET >NIL:")
 (complete 100)
 (exit (cat "OpenDatatypes is taken out (" #took " files). "
-           (if #restart "Restart the Amiga to use AmigaOS 3.2's datatypes.library again." "")))
+           (if #restart "Restart the Amiga so the libraries it put back are the ones in use." "")))
 """)
     return "".join(out)
 
@@ -409,13 +467,15 @@ def main() -> int:
                     help="where Datatypes/build.sh put Classes/ and Devs/ (its PREFIX)")
     ap.add_argument("--library-out", type=Path, default=ROOT / "build" / "library",
                     help="the library's and its classes' build output (their OUT)")
+    ap.add_argument("--zlib-out", type=Path, default=ROOT / "build" / "openzlib",
+                    help="OpenZlib's build output (its OUT), from an amigachrome-guest checkout")
     ap.add_argument("--no-build", action="store_true", help="use what the builds already made")
     ap.add_argument("--lha", action="store_true", help="also make OpenDatatypes-<version>.lha (jlha or lha on PATH)")
     a = ap.parse_args()
 
     if not a.no_build:
-        build(a.library_out)
-    choices, always, library = collect(a.datatypes_out, a.library_out)
+        build(a.library_out, a.zlib_out)
+    choices, always, library, zlib = collect(a.datatypes_out, a.library_out, a.zlib_out)
     if not library:
         print("build_pack: no datatypes.library build: the pack has the datatypes only")
     date = time.strftime("%d.%m.%Y", time.gmtime(int(os.environ.get("SOURCE_DATE_EPOCH", time.time()))))
@@ -430,11 +490,12 @@ def main() -> int:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
 
-    for c in choices + always + ([library] if library else []):
+    extras = ([library] if library else []) + ([zlib] if zlib else [])
+    for c in choices + always + extras:
         for f in c["files"]:
             put(f["pack"], f["src"].read_bytes())
-    put("Install-OpenDatatypes", install_script(a.version, date, choices, always, library).encode("latin-1"))
-    put("Uninstall-OpenDatatypes", uninstall_script(a.version, date, choices, always, library).encode("latin-1"))
+    put("Install-OpenDatatypes", install_script(a.version, date, choices, always, library, zlib).encode("latin-1"))
+    put("Uninstall-OpenDatatypes", uninstall_script(a.version, date, choices, always, library, zlib).encode("latin-1"))
     # NOLOG, as OpenUp's: the Installer's own log would stay behind after an uninstall
     for script in ("Install-OpenDatatypes", "Uninstall-OpenDatatypes"):
         put(script + ".info", amiga_icon.icon(amiga_icon.WBPROJECT, "install", "Installer",
@@ -449,12 +510,13 @@ def main() -> int:
              "sha256": hashlib.sha256(f["src"].read_bytes()).hexdigest()} for f in c["files"]]}
     manifest = {"pack": "OpenDatatypes", "version": a.version, "date": date,
                 "choices": [entry(c) for c in choices], "always": [entry(c) for c in always],
-                "library": entry(library) if library else None}
+                "library": entry(library) if library else None, "zlib": entry(zlib) if zlib else None}
     (a.out / "OpenDatatypes.json").write_text(json.dumps(manifest, indent=1) + "\n")
 
-    n = sum(len(c["files"]) for c in choices + always + ([library] if library else []))
+    n = sum(len(c["files"]) for c in choices + always + extras)
     print(f"{top}: {len(choices)} datatypes to choose, {len(always)} always, "
-          f"{'the library and ' + str(len(library['files']) - 1) + ' system classes, ' if library else ''}{n} files")
+          f"{'the library and ' + str(len(library['files']) - 1) + ' system classes, ' if library else ''}"
+          f"{'z.library, ' if zlib else ''}{n} files")
     if a.lha:
         lha = shutil.which("jlha") or shutil.which("lha")
         if not lha:

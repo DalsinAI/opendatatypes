@@ -62,8 +62,13 @@ SUPERCLASSES = ["stream"]
 SYSTEM = ["picture", "ilbm", "sound", "8svx", "text", "ascii", "animation", "anim"]
 
 
-def stand_ins(base: Path) -> tuple[Path, Path]:
-    dt, lib = base / "dtout", base / "libout"
+ZLIB = b"\0$VER: z.library 53.12 (13.10.2026) OpenZlib, AmigaChrome Team\0"
+
+
+def stand_ins(base: Path) -> tuple[Path, Path, Path]:
+    dt, lib, zl = base / "dtout", base / "libout", base / "zout"
+    (zl / "libs").mkdir(parents=True)
+    (zl / "libs/z.library").write_bytes(ZLIB)
     (dt / "Classes/DataTypes").mkdir(parents=True)
     (dt / "Devs/DataTypes").mkdir(parents=True)
     for cls, descs in DATATYPES.items():
@@ -81,7 +86,7 @@ def stand_ins(base: Path) -> tuple[Path, Path]:
     for c in SYSTEM:
         (lib / f"datatypes/{c}.datatype").write_bytes(f"\0$VER: {c}.datatype 47.100 Team\0".encode())
         (lib / f"datatypes/open{c}.datatype").write_bytes(b"twin, for the ABI test")
-    return dt, lib
+    return dt, lib, zl
 
 
 def os32_disk() -> mi.Disk:
@@ -108,10 +113,10 @@ def run(disk: mi.Disk, drawer: Path, script: str, **kw) -> mi.Installer:
 def main() -> int:
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
-        dt, lib = stand_ins(tmp)
+        dt, lib, zl = stand_ins(tmp)
         out = tmp / "pack"
         r = subprocess.run([sys.executable, "-I", ROOT / "tools/build_pack.py", "--no-build", "--version", "0.1",
-                            "--datatypes-out", dt, "--library-out", lib, "--out", out]
+                            "--datatypes-out", dt, "--library-out", lib, "--zlib-out", zl, "--out", out]
                            + (["--lha"] if shutil.which("jlha") or shutil.which("lha") else []),
                            capture_output=True, text=True)
         print(r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr)
@@ -135,7 +140,10 @@ def main() -> int:
         lfiles = {f["pack"] for f in man["library"]["files"]}
         check(lfiles == {"Library/Libs/datatypes.library"} | {f"Library/Classes/DataTypes/{c}.datatype" for c in SYSTEM},
               "the library and its eight system classes, not the ABI twins")
-        for c in man["choices"] + man["always"] + [man["library"]]:
+        check(man["zlib"] and [f["dest"] for f in man["zlib"]["files"]] == ["LIBS:z.library"]
+              and man["zlib"]["for"] == ["gzip.datatype", "openpng.datatype"],
+              "z.library (OpenZlib) in the pack, for gzip and openpng")
+        for c in man["choices"] + man["always"] + [man["library"], man["zlib"]]:
             for f in c["files"]:
                 if not (top / f["pack"]).is_file():
                     check(False, f"{f['pack']} in the drawer")
@@ -172,7 +180,7 @@ def main() -> int:
         disk = os32_disk()
         before = disk.snapshot()
         i = run(disk, top, "Install-OpenDatatypes")
-        every = man["choices"] + man["always"] + [man["library"]]
+        every = man["choices"] + man["always"] + [man["library"], man["zlib"]]
         put_ok = all(disk.files.get(mi.norm(f["dest"])) == (top / f["pack"]).read_bytes() for c in every for f in c["files"])
         check(put_ok, "a Novice install puts every file where it goes")
         check(disk.files[mi.norm("SYS:Storage/OpenDatatypes/Superseded/Libs/datatypes.library")]
@@ -189,9 +197,10 @@ def main() -> int:
         check("Restart the Amiga" in i.exit_text, "it says to restart, for the library")
         check(len(i.asked) == 3, f"two pages of datatypes and the library's question ({len(i.asked)})")
         needs = [m for m in i.messages if "z.library" in m or "openservice.device" in m]
-        check(len(needs) == 1 and "gzip.datatype, and openpng.datatype's PNG writing," in needs[0]
-              and "openservice.device in DEVS:" in needs[0],
-              "it says what z.library and openservice.device are needed for, when they are missing")
+        check(len(needs) == 1 and "z.library" not in needs[0] and "openservice.device in DEVS:" in needs[0],
+              "it says what openservice.device is needed for when it is missing, and nothing of z.library: it brings it")
+        check(disk.files.get(mi.norm("LIBS:z.library")) == ZLIB and "OpenZlib" not in i.exit_text
+              and "z.library" not in i.exit_text, "OpenZlib's z.library goes in; no restart for it when none was there")
         d2 = os32_disk()
         d2.files[mi.norm("LIBS:z.library")] = b"OpenZlib"
         d2.files[mi.norm("DEVS:openservice.device")] = b"OpenService"
@@ -221,6 +230,29 @@ def main() -> int:
         check(disk.snapshot() == before, "and the uninstall leaves the disk as it was")
         check("Restart" not in u.exit_text, "no restart when the library wasn't installed")
 
+        # an Aminet z.library already there: replaced by OpenZlib, kept, and put back
+        disk = os32_disk()
+        disk.files[mi.norm("LIBS:z.library")] = b"Aminet z.library 53.11"
+        before = disk.snapshot()
+        i = run(disk, top, "Install-OpenDatatypes")
+        check(disk.files[mi.norm("LIBS:z.library")] == ZLIB
+              and disk.files[mi.norm("SYS:Storage/OpenDatatypes/Superseded/Libs/z.library")] == b"Aminet z.library 53.11"
+              and "OpenZlib's z.library" in i.exit_text,
+              "an Aminet z.library is replaced by OpenZlib's, kept, and it says to restart")
+        i = run(disk, top, "Install-OpenDatatypes")
+        check(disk.files[mi.norm("SYS:Storage/OpenDatatypes/Superseded/Libs/z.library")] == b"Aminet z.library 53.11"
+              and "OpenZlib's z.library" not in i.exit_text,
+              "installed again: the Aminet one stays the one kept, and no restart for its own z.library")
+        run(disk, top, "Uninstall-OpenDatatypes")
+        check(disk.snapshot() == before, "the uninstall puts the Aminet z.library back")
+        for answers, what, want in ((({"(1 of 2)": 0b111111110, "(2 of 2)": 0b01}), "neither gzip nor openpng", False),
+                                    (({"(1 of 2)": 0b111111110, "(2 of 2)": 0b11}), "gzip without openpng", True),
+                                    (({"(1 of 2)": 0b000000001, "(2 of 2)": 0b00}), "openpng without gzip", True)):
+            disk = os32_disk()
+            run(disk, top, "Install-OpenDatatypes", answers=answers)
+            check((mi.norm("LIBS:z.library") in disk.files) == want,
+                  f"{what}: z.library {'goes in' if want else 'stays out'}")
+
         # an OpenUp-installed copy of a datatype is put back as it was
         disk = os32_disk()
         disk.files[mi.norm("SYS:Classes/DataTypes/webp.datatype")] = b"OpenUp's webp 47.8"
@@ -249,11 +281,15 @@ def main() -> int:
         # without a library build, the pack has no library question
         out2 = tmp / "pack2"
         r = subprocess.run([sys.executable, "-I", ROOT / "tools/build_pack.py", "--no-build", "--datatypes-out", dt,
-                            "--library-out", tmp / "none", "--out", out2], capture_output=True, text=True)
+                            "--library-out", tmp / "none", "--zlib-out", tmp / "none", "--out", out2],
+                           capture_output=True, text=True)
         man2 = json.loads((out2 / "OpenDatatypes.json").read_text())
         text = (out2 / "OpenDatatypes/Install-OpenDatatypes").read_text(encoding="latin-1")
-        check(r.returncode == 0 and man2["library"] is None and "#lib" not in text,
-              "no library build: the datatypes only, and no library question")
+        check(r.returncode == 0 and man2["library"] is None and "#lib" not in text and man2["zlib"] is None,
+              "no library or OpenZlib build: the datatypes only, and no library question")
+        i = run(os32_disk(), out2 / "OpenDatatypes", "Install-OpenDatatypes")
+        check(any("gzip.datatype, and openpng.datatype's PNG writing, need z.library" in m for m in i.messages),
+              "and without OpenZlib it says what needs a z.library")
         disk = os32_disk()
         before = disk.snapshot()
         run(disk, out2 / "OpenDatatypes", "Install-OpenDatatypes")

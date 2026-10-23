@@ -83,8 +83,9 @@ amigachrome-guest's `tools/openkickrom/trial-1m/build.sh` (`DT=`).
 python3 tools/build_pack.py --version 0.1 --lha
 ```
 
-builds everything here (the datatypes, and datatypes.library with its
-system classes once `libraries/opendatatypes/` is in) and lays it out as
+builds everything here (the datatypes, datatypes.library with its system
+classes, and z.library, the Team's OpenZlib, from an amigachrome-guest
+checkout: `AMIGACHROME_GUEST`, else beside this one) and lays it out as
 `build/pack/OpenDatatypes`, a drawer to run the Installer from, and
 `OpenDatatypes-0.1.lha` (jlha or lha on PATH). `--no-build` takes what the
 builds already made.
@@ -92,7 +93,8 @@ builds already made.
 - `Install-OpenDatatypes`, a Commodore Installer script, needs AmigaOS 3.2
   and a 68040 or 68060 and nothing else. Every datatype is a choice, and
   datatypes.library with its eight system classes is one more, ticked; a
-  Novice user gets them all. AddDataTypes REFRESH runs at the end.
+  Novice user gets them all. z.library (OpenZlib) goes in with gzip and
+  openpng, which open it. AddDataTypes REFRESH runs at the end.
 - Nothing is deleted: what a file replaces is kept in
   `SYS:Storage/OpenDatatypes/Superseded`, and each file the pack put in has
   a mark in `SYS:Storage/OpenDatatypes/Installed`.
