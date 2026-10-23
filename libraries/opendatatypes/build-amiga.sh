@@ -7,8 +7,9 @@
 #   datatypes.library      the replacement (its class is "datatypesclass")
 #   opendatatypes.library  the same under its own name, for the ABI test
 #                          (its class is "opendatatypesclass")
-#   AddDataTypes           OpenBench's AddDataTypes (commands/adddatatypes),
-#                          which talks to OpenDatatypes' private call
+#   AddDataTypes           OpenBench's AddDataTypes (amigachrome-guest's
+#                          commands/adddatatypes, with GUEST=), which talks
+#                          to OpenDatatypes' private call
 #   DatatypesABITest       runs the same calls through OS 3.2's library and
 #                          ours and lists every difference
 # and sys/datatypes.catalog's descriptor stays in catalogs/datatypes.cd.
@@ -44,11 +45,22 @@ for lib in datatypes opendatatypes; do
     [ -z "$und" ] || { echo "undefined in $lib.library: $und" >&2; exit 1; }
 done
 
-STOVE="$STOVE" OUT="$OUT/commands" sh "$HERE/../../commands/build-amiga.sh" adddatatypes
-cp "$OUT/commands/C/adddatatypes" "$OUT/c/AddDataTypes"
-echo "$OUT/c/AddDataTypes ($(wc -c < "$OUT/c/AddDataTypes") bytes)"
+# AddDataTypes is OpenBench's command, in amigachrome-guest: GUEST= a checkout
+# (default amigachrome-guest, else guest, beside this repository); without
+# one it is left out.
+G=${GUEST:-"$HERE/../../../amigachrome-guest"}
+[ -d "$G" ] || G="$HERE/../../../guest"
+ADT=
+if [ -f "$G/commands/build-amiga.sh" ]; then
+    STOVE="$STOVE" OUT="$OUT/commands" sh "$G/commands/build-amiga.sh" adddatatypes
+    cp "$OUT/commands/C/adddatatypes" "$OUT/c/AddDataTypes"
+    echo "$OUT/c/AddDataTypes ($(wc -c < "$OUT/c/AddDataTypes") bytes)"
+    ADT="$OUT/c/AddDataTypes"
+else
+    echo "AddDataTypes: left out (no amigachrome-guest checkout at $G; set GUEST)"
+fi
 
 "$CC" -m68040 -O2 -std=gnu99 -fno-delete-null-pointer-checks -Wall -Wextra -Werror -Wno-pointer-sign -Wno-format \
   -noixemul $SOFT040 -o "$OUT/tests/DatatypesABITest" "$HERE/tests/DatatypesABITest.c"
 echo "$OUT/tests/DatatypesABITest ($(wc -c < "$OUT/tests/DatatypesABITest") bytes)"
-sha256sum "$OUT"/libs/* "$OUT/c/AddDataTypes" "$OUT/tests/DatatypesABITest"
+sha256sum "$OUT"/libs/* $ADT "$OUT/tests/DatatypesABITest"
