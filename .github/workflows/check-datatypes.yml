@@ -3,7 +3,8 @@
 # UBSan: opentga.datatype's (Datatypes/tests/test-tga.sh) and cdxl.datatype's
 # (Datatypes/tests/test-cdxl.sh, with ffmpeg's own CDXL decoder as a check),
 # and stream.datatype's with gzip.datatype's and brotli.datatype's
-# (Datatypes/tests/test-stream.sh).
+# (Datatypes/tests/test-stream.sh), and openpng.datatype's PNG writer
+# (Datatypes/tests/test-pngenc.sh).
 # OpenDatatypes' cores (datatypes.library and its eight class datatypes) under
 # qemu-m68k with an m68k cross GCC; the datatypesclass test
 # (tests/m68k/test_opendatatypes_class.sh) needs an amigachrome-guest
@@ -32,6 +33,8 @@ jobs:
         run: sh Datatypes/tests/test-cdxl.sh
       - name: stream.datatype with gzip and Brotli
         run: sh Datatypes/tests/test-stream.sh
+      - name: openpng.datatype's PNG writer
+        run: sh Datatypes/tests/test-pngenc.sh
   m68k:
     runs-on: ubuntu-latest
     steps:
