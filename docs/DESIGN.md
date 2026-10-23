@@ -10,7 +10,8 @@ Design 0.1, 23 October 2026. The Team's decisions of that morning:
    to look for cores, GPU etc before falling back to a single core m68k".
 
 Sections 1 and 2 say what rules 2 and 3 mean in code. Section 3 is where
-each datatype stands and what it still needs.
+each datatype stands and what it still needs, and section 4 the order of
+work.
 
 ## 1. Writing
 
@@ -25,10 +26,16 @@ each datatype stands and what it still needs.
 - **`DTWM_RAW`** writes the datatype's **own** format: a WebP for
   webp.datatype, a PNG for openpng.datatype. This is the new part. It is
   what lets a program save in a format through its datatype, with no
-  library of its own (MultiView's Save As, OpenBrowser's image save, a
-  converter in three calls: `NewDTObject` from one file, `SetDTAttrs` for
-  the target datatype's options, `DoMethod(DTM_WRITE, DTWM_RAW)` to the
-  other).
+  library of its own (MultiView's Save As, OpenBrowser's image save).
+  A converter needs an object of the **target** class, since `DTM_WRITE`
+  goes to the class an object was made with: it opens the source file
+  (`NewDTObject`), reads its pixels or sound out (`PDTM_READPIXELARRAY`,
+  `SDTA_Sample`), makes an empty object of the target class
+  (`NewDTObject(NULL, DTA_SourceType, DTST_RAM, DTA_BaseName, "openpng",
+  ...)`, which datatypes.library supports), writes them in
+  (`PDTM_WRITEPIXELARRAY`, `SDTA_Sample`), sets that datatype's options
+  with `SetDTAttrs`, and sends it `DTM_WRITE` in raw mode with a file
+  handle open on the destination.
 
 What raw mode writes, in order of preference:
 
@@ -36,30 +43,45 @@ What raw mode writes, in order of preference:
    `PDTM_WRITEPIXELARRAY`, a scale, or new sound data). This is the real
    write option.
 2. Where the object can't be encoded but came from a file of that format,
-   the file as it came (openmodule.datatype does this today). That keeps
-   Save working while 1 is written, and stays as the answer for formats
-   that can't be made from what the object holds (section 2).
+   the file as it came (openmodule.datatype does this today), **only while
+   the object is as it was read**. Once its pixels, size or sound have
+   changed, writing the original would lose the changes and say it had
+   worked, so raw mode fails with `ERROR_NOT_IMPLEMENTED` instead. This
+   keeps Save working while 1 is written, and stays as the answer for
+   formats that can't be made from what the object holds (section 3).
 
 Options go through attributes the datatype documents (quality, lossless,
 compression level, bit rate), with defaults that need no attribute at all.
 Each datatype's README lists them.
 
-A format whose encoder the Team may not ship (section 2's "no" rows) answers
-`DTWM_RAW` with the original file if it has one, else `ERROR_NOT_IMPLEMENTED`,
-and still writes IFF.
+A format whose encoder the Team may not ship (section 3's "no" rows) answers
+`DTWM_RAW` as in 2: the original file while the object is unchanged, else
+`ERROR_NOT_IMPLEMENTED`. It still writes IFF.
 
 ## 2. The ladder: where the work happens
 
 Every datatype looks, when an object opens, for the places OpenUp offers,
-and uses the first that is there for each kind of work. Only when none is
-does it fall back to this CPU alone.
+and uses the first that is there for each kind of work, in that kind's
+order. Only when none is does it fall back to this CPU alone.
 
-| Rung | What | Through | Good for |
+The places (`OIA_Rung` is the number an object reports; it is a name, not
+the order they are tried in):
+
+| Place | `OIA_Rung` | Through | What it can do |
 | --- | --- | --- | --- |
-| 1 | **A cores board core**: AmigaChrome's cores board ($DA15 product 7, up to eight translated 68040 cores) | `openmulticore.library` jobs (`OMC_Submit`, `OMC_Wait`), DalsinAI/openamigamulticore | 68k compute: decoding and encoding (libwebp, libvpx, our PNG and TGA code), mixing, conversion, scaling. A job calls no OS, touches no Chip RAM and writes only its granted buffers |
-| 2 | **The GPU** | `opengpu.library` (the one library: OpenGPU, OpenGfx and SDL 2) | Pixel work: scaling, colour conversion, dithering to 256 colours or HAM8, presenting video frames. Video decode where a driver offers it, through `openmedia.library` once it exists |
-| 3 | **A services card or a paired Cradle** | `openservice.device`: `media.decode/1`, `doc.render/1`, and the encode calls section 3 adds, DalsinAI/openamigaservice | Formats with no 68k code (AVIF, HEIC, office documents, most video), and heavy work a core can't take |
-| 4 | **This CPU**, a single 68k | plain calls | Everything that has 68k code, when nothing above is there |
+| **A cores board core**: AmigaChrome's cores board ($DA15 product 7, up to eight translated 68040 cores) | 2 | `openmulticore.library` jobs (`OMC_Submit`, `OMC_Wait`), DalsinAI/openamigamulticore | 68k compute: decoding and encoding (libwebp, libvpx, our PNG and TGA code), mixing, and pixel work too. A job calls no OS, touches no Chip RAM and writes only its granted buffers |
+| **The GPU** | 4 (new) | `opengpu.library` (the one library: OpenGPU, OpenGfx and SDL 2) | Pixel work: scaling, colour conversion, dithering to 256 colours or HAM8, presenting video frames. Video decode where a driver offers it, through `openmedia.library` once it exists |
+| **A services card or a paired Cradle** | 3 | `openservice.device`: `media.decode/1`, `doc.render/1`, and the encode calls section 4 adds, DalsinAI/openamigaservice | Formats with no 68k code (AVIF, HEIC, office documents, most video), and heavy work a core can't take |
+| **This CPU**, a single 68k | 1 | plain calls | Everything that has 68k code, when nothing above is there |
+
+The order, per kind of work:
+
+| Kind of work | Tried in this order |
+| --- | --- |
+| Decoding, encoding, mixing (68k code) | a core, the service, this CPU |
+| Formats with no 68k code | the service only |
+| Pixel work: scaling, colour conversion, dithering, HAM8 | the GPU, a core, this CPU |
+| Video decode | the GPU (a driver through `openmedia.library`), a core, the service, this CPU |
 
 The rules:
 
@@ -69,27 +91,31 @@ The rules:
   next, as openmodule.datatype does when a core fails it.
 - **The same answer on every rung.** A rung is faster, never different:
   each kind of work is tested against this CPU's result.
-- **Rung 4 is always there for formats with 68k code.** Formats with none
-  (rung 3 only) fail to open without a service, as they do today, and say
-  why.
+- **This CPU is always there for formats with 68k code.** Formats with
+  none (the service only) fail to open without a service, as they do today,
+  and say why.
 - **One piece of code chooses**, `Datatypes/common/`, shared by every
   datatype, so each one asks the same questions in the same order.
   openmodule.datatype's choice (`openmodule/DESIGN.md`, section 7) is the
   first user and the model.
-- **Forcing a rung** for tests: `ENV:OpenImage/Rung` set to `cores`, `gpu`,
-  `service` or `cpu`, per datatype as `ENV:OpenImage/<Datatype>Rung`
-  (openmodule's `ModulePlayer` stays as a synonym). A forced rung that is
-  not there falls to the next.
+- **Forcing a place** for tests: `ENV:OpenImage/Rung` set to `cores`,
+  `gpu`, `service` or `cpu`, per datatype as `ENV:OpenImage/<Datatype>Rung`.
+  A forced place that is not there, or fails, **fails the open** and says
+  which and why, so a test that forces the GPU never passes on this CPU
+  without knowing. Tests also check `OIA_Rung`. openmodule's older
+  `ModulePlayer` keeps its meaning (a forced place that is not there falls
+  to the next) for the settings people already have.
 - **Saying where**: `OIA_DecodedBy`, `OIA_Stats` and `OIA_Rung`
   (`Datatypes/include/datatypes/openimage.h`) on every datatype, not only
-  openmodule, so OpenPlay and MultiView's info can show it. `OIA_Rung`'s
-  numbers get a GPU value (4) beside today's three.
+  openmodule, so OpenPlay and MultiView's info can show it. `OIA_Rung`
+  keeps today's numbers (1 this CPU, 2 a core, 3 the service) and adds 4
+  for the GPU.
 - **Writing uses the same ladder.** Encoding is compute like decoding:
   WebP and VP9 encodes go to a core first, then the service, then this CPU.
 
 `openmulticore.library` and `opengpu.library` are not in OpenUp yet, so
-rungs 1 and 2 are only there where they are installed by hand. OpenUp
-should carry both before the datatypes rely on them.
+the cores board and the GPU are only there where they are installed by
+hand. OpenUp should carry both before the datatypes rely on them.
 
 ## 3. Where each datatype stands
 
