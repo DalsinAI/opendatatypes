@@ -115,6 +115,7 @@ class Installer:
         self.answers = answers or {}
         self.ran: list[str] = []
         self.exit_text = ""
+        self.messages: list[str] = []
 
     def run(self, text: str) -> None:
         try:
@@ -209,7 +210,10 @@ class Installer:
             assert not v, "getversion of a file isn't used"
             return self.os << 16
         plain, named = self.opts(args)
-        if f in ("welcome", "message", "working", "complete"):
+        if f == "message":
+            self.messages.append("".join(str(self.ev(a)) for a in plain))
+            return 0
+        if f in ("welcome", "working", "complete"):
             return 0
         if f == "abort":
             raise Abort(self.ev(plain[0]))

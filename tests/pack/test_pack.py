@@ -188,6 +188,16 @@ def main() -> int:
         check(i.ran == ["C:AddDataTypes REFRESH QUIET >NIL:"], "AddDataTypes REFRESH runs")
         check("Restart the Amiga" in i.exit_text, "it says to restart, for the library")
         check(len(i.asked) == 3, f"two pages of datatypes and the library's question ({len(i.asked)})")
+        needs = [m for m in i.messages if "z.library" in m or "openservice.device" in m]
+        check(len(needs) == 1 and "gzip.datatype, and openpng.datatype's PNG writing," in needs[0]
+              and "openservice.device in DEVS:" in needs[0],
+              "it says what z.library and openservice.device are needed for, when they are missing")
+        d2 = os32_disk()
+        d2.files[mi.norm("LIBS:z.library")] = b"OpenZlib"
+        d2.files[mi.norm("DEVS:openservice.device")] = b"OpenService"
+        i2 = run(d2, top, "Install-OpenDatatypes")
+        check(not any("z.library" in m or "openservice.device" in m for m in i2.messages),
+              "and says nothing when both are there")
 
         run(disk, top, "Install-OpenDatatypes")
         check(disk.files[mi.norm("SYS:Storage/OpenDatatypes/Superseded/Libs/datatypes.library")]

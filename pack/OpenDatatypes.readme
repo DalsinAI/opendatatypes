@@ -44,5 +44,9 @@ SYS:Storage/OpenDatatypes, takes the pack out and puts those files back.
 After installing or taking out the library, restart the Amiga.
 
 Built for the 68040 with soft float, so a 68LC040 or 68EC040 is fine.
+gzip.datatype, and openpng.datatype's PNG writing, need z.library in LIBS:
+(the Team's OpenZlib, or z.library 53 from Aminet). The datatypes that
+decode by a Cradle need openservice.device (OpenUp's OpenService part).
+The Installer says so when either is missing.
 
 Source: https://github.com/DalsinAI/opendatatypes

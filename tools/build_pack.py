@@ -280,6 +280,28 @@ def install_script(version: str, date: str, choices: list, always: list, library
               "The datatypes marked 'by a Cradle' decode on a services card or a paired Cradle; "
               "without one they say so and don't open."))
 """]
+    # What some datatypes need that the pack doesn't carry (Datatypes/README.md): said before the
+    # choices, only when this Amiga lacks it, so nobody is left wondering why one doesn't work.
+    classes = {c["class"] for c in choices + always}
+    zneed = [n for n in ("gzip.datatype", "openpng.datatype") if n in classes]
+    sneed = [n for n in ("openpicture.datatype", "opensound.datatype", "opendoc.datatype", "openvideo.datatype")
+             if n in classes]
+    if zneed or sneed:
+        out.append('(set #needs "")\n')
+    if zneed:
+        what = "gzip.datatype, and openpng.datatype's PNG writing," if len(zneed) == 2 else zneed[0]
+        out.append(f"""(if (= (exists "LIBS:z.library" (noreq)) 0)
+    (set #needs (cat #needs {q(what + " need z.library in LIBS: (the Team's OpenZlib, or z.library 53 from "
+                               "Aminet), which this Amiga doesn't have yet. ")})))
+""")
+    if sneed:
+        out.append(f"""(if (= (exists "DEVS:openservice.device" (noreq)) 0)
+    (set #needs (cat #needs {q("The datatypes marked 'by a Cradle' need openservice.device in DEVS: (OpenUp's "
+                               "OpenService part) and a services card or paired Cradle; this Amiga doesn't have "
+                               "openservice.device yet. ")})))
+""")
+    if zneed or sneed:
+        out.append('(if (<> #needs "") (message #needs))\n')
     pages = [choices[i:i + PAGE] for i in range(0, len(choices), PAGE)]
     for k, page in enumerate(pages, 1):
         labels = " ".join(q(c["label"]) for c in page)
