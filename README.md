@@ -16,6 +16,9 @@ OpenBrowser) opens the formats they read.
 | `opendoc.datatype` | `Datatypes/opendoc` | documents |
 | `cdxl.datatype` | `Datatypes/cdxl` | CDXL films |
 | `openvideo.datatype` | `Datatypes/openvideo` | video class |
+| `stream.datatype` | `Datatypes/stream` | the data class (GID_DATA): byte streams, read as a whole or a piece at a time |
+| `gzip.datatype` | `Datatypes/gzip` | gzip and zlib data, inflated by z.library (OpenZlib) |
+| `brotli.datatype` | `Datatypes/brotli` | Brotli data (our own decoder, RFC 7932) |
 
 They came here from DalsinAI/openamigaimage on 23 October 2026, with their
 history, unchanged: the same files at the same paths, so they build to the
