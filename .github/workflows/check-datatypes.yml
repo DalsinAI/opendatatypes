@@ -5,6 +5,10 @@
 # and stream.datatype's with gzip.datatype's and brotli.datatype's
 # (Datatypes/tests/test-stream.sh), and openpng.datatype's PNG writer
 # (Datatypes/tests/test-pngenc.sh).
+# OpenDatatypes' cores (datatypes.library and its eight class datatypes) under
+# qemu-m68k with an m68k cross GCC; the datatypesclass test
+# (tests/m68k/test_opendatatypes_class.sh) needs an amigachrome-guest
+# checkout (GUEST=) and runs in amigachrome-guest's own CI.
 # The Amiga builds need the os32-gcc16 stove and are made on the build PC.
 name: Datatypes
 on:
@@ -31,3 +35,15 @@ jobs:
         run: sh Datatypes/tests/test-stream.sh
       - name: openpng.datatype's PNG writer
         run: sh Datatypes/tests/test-pngenc.sh
+  m68k:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: m68k cross GCC, G++ and qemu-m68k
+        run: sudo apt-get update && sudo apt-get install -y gcc-m68k-linux-gnu g++-m68k-linux-gnu qemu-user
+      - name: OpenDatatypes (datatypes.library) core
+        run: QEMU_M68K=qemu-m68k sh tests/m68k/test_opendatatypes.sh
+      - name: OpenDatatypes picture, ilbm, sound and 8svx datatype cores
+        run: QEMU_M68K=qemu-m68k sh tests/m68k/test_opendatatypes_picsound.sh
+      - name: OpenDatatypes text, ascii, animation and anim classes
+        run: QEMU_M68K=qemu-m68k sh tests/m68k/test_opendatatypes_textanim.sh
