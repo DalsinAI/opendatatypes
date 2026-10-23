@@ -16,6 +16,9 @@ OpenBrowser) opens the formats they read.
 | `opendoc.datatype` | `Datatypes/opendoc` | documents |
 | `cdxl.datatype` | `Datatypes/cdxl` | CDXL films |
 | `openvideo.datatype` | `Datatypes/openvideo` | video class |
+| `stream.datatype` | `Datatypes/stream` | the data class (GID_DATA): byte streams, read as a whole or a piece at a time |
+| `gzip.datatype` | `Datatypes/gzip` | gzip and zlib data, inflated by z.library (OpenZlib) |
+| `brotli.datatype` | `Datatypes/brotli` | Brotli data (our own decoder, RFC 7932) |
 
 ## OpenDatatypes: datatypes.library and the system's class datatypes
 
