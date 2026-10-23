@@ -7,7 +7,7 @@ OpenBrowser) opens the formats they read.
 | Datatype | Folder | What it reads |
 | --- | --- | --- |
 | `openpicture.datatype` | `Datatypes/openpicture` | picture class (our own) |
-| `openpng.datatype` | `Datatypes/png` | PNG (our own decoder) |
+| `openpng.datatype` | `Datatypes/png` | PNG (our own decoder; writes PNG from 47.4) |
 | `opentga.datatype` | `Datatypes/tga` | TGA (our own decoder) |
 | `webp.datatype` | `Datatypes/webp` (libwebp 1.6.0) | WebP pictures |
 | `webm.datatype` | `Datatypes/webm` (libvpx 1.17.0) | WebM films |
