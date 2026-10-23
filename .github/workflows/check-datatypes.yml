@@ -1,0 +1,26 @@
+# Copyright (c) 2026 AmigaChrome Team. MIT licence.
+# The datatypes' decoder cores on the host (x86), under AddressSanitizer and
+# UBSan: opentga.datatype's (Datatypes/tests/test-tga.sh) and cdxl.datatype's
+# (Datatypes/tests/test-cdxl.sh, with ffmpeg's own CDXL decoder as a check).
+# The Amiga builds need the os32-gcc16 stove and are made on the build PC.
+name: Datatypes
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg python3-pil
+      - name: opentga.datatype decoder
+        run: sh Datatypes/tests/test-tga.sh
+      - name: cdxl.datatype core
+        run: sh Datatypes/tests/test-cdxl.sh
