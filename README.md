@@ -20,6 +20,27 @@ OpenBrowser) opens the formats they read.
 | `gzip.datatype` | `Datatypes/gzip` | gzip and zlib data, inflated by z.library (OpenZlib) |
 | `brotli.datatype` | `Datatypes/brotli` | Brotli data (our own decoder, RFC 7932) |
 
+## OpenDatatypes: datatypes.library and the system's class datatypes
+
+`libraries/opendatatypes/` is OpenDatatypes: our clean-room
+`datatypes.library` 47.100 (the ROM's) and its eight class datatypes in
+`libraries/opendatatypes/classes/datatypes/`: picture, ilbm, sound, 8svx,
+text, ascii, animation and anim. Its README has the steps, the files and
+what OS 3.2's probe measured. Build it with
+`libraries/opendatatypes/build-amiga.sh` (os32-gcc16 stove; `GUEST=` an
+amigachrome-guest checkout adds OpenBench's AddDataTypes). Its m68k tests
+are `tests/m68k/test_opendatatypes*.sh`. The ROM build
+(amigachrome-guest's `tools/openkickrom/trial-1m/build.sh`) takes it from a
+checkout of this repository (`DT=`).
+
+It came here from DalsinAI/amigachrome-guest on 23 October 2026 with its
+history, at the same paths. `common/include/oa_protos_begin.h`,
+`oa_protos_end.h`, `libraries/common/open_arith.c` and `check_fd.py` are
+copies of amigachrome-guest's, at the same paths, so the library builds to
+the same bytes.
+
+## Picture, sound and media datatypes
+
 They came here from DalsinAI/openamigaimage on 23 October 2026, with their
 history, unchanged: the same files at the same paths, so they build to the
 same bytes. Building, the descriptors and the test results are in
@@ -43,7 +64,7 @@ native helpers for `Datatypes/common/dtlib.c` (`AC_HELPERS`, see
 `AMIGACHROME_GUEST_PINNED_COMMIT`.
 
 The ROM's datatypes (openpicture, openpng, opentga, opensound, opendoc in
-ROM:Classes/DataTypes) are built from a checkout of this repository by
+ROM:Classes/DataTypes) and datatypes.library are built from a checkout of this repository by
 amigachrome-guest's `tools/openkickrom/trial-1m/build.sh` (`DT=`).
 
 ## Tests
