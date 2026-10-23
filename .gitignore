@@ -7,3 +7,8 @@
 /Datatypes/out/
 /Datatypes/work/
 /Datatypes/tarballs/
+
+# The pack and the library's build (tools/build_pack.py)
+/build/pack/
+/build/library/
+__pycache__/
