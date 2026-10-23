@@ -139,7 +139,7 @@ legal advice; the "no" rows need the Team's word before anyone writes them.
 | openvideo | none | WebM (VP9 or AV1 with Opus), MKV with the same, MPEG-1 | yes for those (royalty-free; MPEG-1's patents have ended). **No**: MP4/H.264, HEVC, WMV (encoder patents) | the service | HAM8 and 256-colour conversion on the GPU, then cores |
 | stream, gzip, brotli | write in #1 | done there | yes: zlib licence and MIT | this CPU | core jobs for compression |
 
-### datatypes.library's system classes (`libraries/opendatatypes/`, arriving in #3)
+### datatypes.library's system classes (`libraries/opendatatypes/`)
 
 | Class | IFF write today | To add |
 | --- | --- | --- |
