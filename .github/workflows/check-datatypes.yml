@@ -3,8 +3,11 @@
 # UBSan: opentga.datatype's (Datatypes/tests/test-tga.sh) and cdxl.datatype's
 # (Datatypes/tests/test-cdxl.sh, with ffmpeg's own CDXL decoder as a check),
 # and stream.datatype's with gzip.datatype's and brotli.datatype's
-# (Datatypes/tests/test-stream.sh), and openpng.datatype's PNG writer
-# (Datatypes/tests/test-pngenc.sh).
+# (Datatypes/tests/test-stream.sh), and the writers: openpng.datatype's
+# (Datatypes/tests/test-pngenc.sh), opentga's (test-tgaenc.sh), webp's
+# lossless one with libwebp patched as for the Amiga (test-webpenc.sh) and
+# gzip's (test-gzenc.sh), each read back by our decoders and by Pillow or
+# Python's zlib.
 # OpenDatatypes' cores (datatypes.library and its eight class datatypes) under
 # qemu-m68k with an m68k cross GCC; the datatypesclass test
 # (tests/m68k/test_opendatatypes_class.sh) needs an amigachrome-guest
@@ -35,6 +38,12 @@ jobs:
         run: sh Datatypes/tests/test-stream.sh
       - name: openpng.datatype's PNG writer
         run: sh Datatypes/tests/test-pngenc.sh
+      - name: opentga.datatype's TGA writer
+        run: sh Datatypes/tests/test-tgaenc.sh
+      - name: webp.datatype's lossless WebP writer
+        run: sh Datatypes/tests/test-webpenc.sh
+      - name: gzip.datatype's gzip writer
+        run: sh Datatypes/tests/test-gzenc.sh
   m68k:
     runs-on: ubuntu-latest
     steps:
