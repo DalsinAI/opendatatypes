@@ -127,17 +127,17 @@ legal advice; the "no" rows need the Team's word before anyone writes them.
 
 | Datatype | Raw write today | Raw write to add | Licence | Ladder today | Ladder to add |
 | --- | --- | --- | --- | --- | --- |
-| webp | none | WebP, lossy and lossless, with alpha | yes: libwebp's encoder is in the same BSD tarball | this CPU | encode and decode as core jobs; the service |
+| webp | lossless WebP (#6) | lossy WebP, as an option | yes: libwebp's encoder is in the same BSD tarball | this CPU | encode and decode as core jobs; the service |
 | webm | none | WebM, VP8 or VP9, with Opus or Vorbis sound | yes: libvpx (BSD, WebM patent grant); Opus and Vorbis are BSD and royalty-free | this CPU (sound by the service) | frames as core jobs; dithering on the GPU |
-| openpng | none (PNG out in #2) | PNG, every colour type | yes: our own code | this CPU | core jobs |
-| opentga | none | TGA 2.0, uncompressed and RLE | yes: our own code, Truevision's public spec | this CPU | core jobs |
-| cdxl | none | CDXL, the film as it is | yes: our own code | this CPU | GPU for chunky films' dithering |
+| openpng | PNG (#2) | done | yes: our own code | this CPU | core jobs |
+| opentga | TGA 2.0, RLE or not (#6) | done | yes: our own code, Truevision's public spec | this CPU | core jobs |
+| cdxl | the film as it plays (#6) | done | yes: our own code | this CPU | GPU for chunky films' dithering |
 | openmodule | the module as it came | (IFF: the song rendered to 8SVX) | yes for 8SVX (libxmp, MIT); a module can't be made from sound | cores, service, this CPU | the GPU has nothing to do here |
 | openpicture | none | AVIF, JPEG XL, QOI, OpenEXR, Radiance HDR, JPEG 2000, DDS through the service | yes: libavif, libjxl, OpenJPEG and OpenEXR are BSD; AV1 is royalty-free. **No**: HEIC (HEVC patents), camera RAW and fonts (nothing to write); PSD and XCF later | the service | scaling on the GPU |
 | opensound | none | FLAC, Ogg Vorbis, Opus, ALAC, MP3 through the service | yes: FLAC, Vorbis, Opus (BSD), ALAC (Apache 2.0), MP3 (LAME runs in the service; the patents ended in 2017). **No**: AAC and WMA (encoder licences and patents); MIDI, SID and modules can't be made from sound | the service | decode as core jobs where there is 68k code (FLAC first) |
 | opendoc | none | the document as it came; converted by the service to ODF, PDF or DOCX | yes: LibreOffice (MPL 2.0) runs as its own program on the Cradle | the service | page scaling on the GPU |
 | openvideo | none | WebM (VP9 or AV1 with Opus), MKV with the same, MPEG-1 | yes for those (royalty-free; MPEG-1's patents have ended). **No**: MP4/H.264, HEVC, WMV (encoder patents) | the service | HAM8 and 256-colour conversion on the GPU, then cores |
-| stream, gzip, brotli | write in #1 | done there | yes: zlib licence and MIT | this CPU | core jobs for compression |
+| stream, gzip, brotli | plain bytes; gzip coded again on request, `SDTA_WriteCoded` (#6) | a Brotli encoder (our own, from RFC 7932) | yes: zlib licence and MIT | this CPU | core jobs for compression |
 
 ### datatypes.library's system classes (`libraries/opendatatypes/`)
 
@@ -154,8 +154,9 @@ legal advice; the "no" rows need the Team's word before anyone writes them.
 1. `Datatypes/common/`: the shared ladder code, lifted from
    openmodule.datatype, with `ENV:OpenImage/Rung` and `OIA_*` on every
    datatype. Openmodule moves onto it with no change in behaviour.
-2. Raw write for the Team's own formats: opentga, openpng (with #2),
-   cdxl, then webp.
+2. Raw write for the Team's own formats: openpng (#2); opentga, cdxl,
+   lossless webp and gzip (#6). Each still to be checked on an Amiga with
+   `tests/dtsave.c`.
 3. ANIM write in the animation class, so every animation datatype writes
    IFF.
 4. Core jobs for webp, openpng and opentga decoding and encoding; GPU
