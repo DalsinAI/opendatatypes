@@ -130,6 +130,12 @@ How they are made:
   (`common/dtlib.c`): Open, Close, Expunge and ObtainEngine(). Only libnix's
   string and setjmp functions are linked in, and memory comes from
   `AllocVec()`, so several programs can decode at once.
+- **The version in the ROMTag.** Its `rt_Version` is `DT_VERSION` (47, every
+  datatype's version) and the revision is the one in the ID string, so
+  ramlib and amigachrome-guest's packed ROM weigh a copy on a disk against
+  the ROM's by number and the newer runs. `tests/test-romtag.py` checks each
+  datatype's `LibVersion`, `LibRevision` and ID string against it (and, given
+  the built `.datatype` files, their ROMTags).
 - **AC090's native helpers.** `common/dtlib.c`'s `realloc` copies, and its
   `calloc` clears, through amigachrome-guest's helpers (`../achelpers/`,
   `AC_HELPERS=1`, or `auto`, the default, when the pinned commit is to hand): x86 or ARM64 code on AmigaChrome, 68k code written

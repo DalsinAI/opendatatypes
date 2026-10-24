@@ -200,12 +200,23 @@ static const ULONG initTable[] = {
     (ULONG)libInit
 };
 
+/* rt_Version is the class's version: ramlib, dos and the packed ROM's files
+ * on demand weigh a copy by it and the revision in its ID string, and the
+ * newer one runs (amigachrome-guest's common/include/okvr.h). With 0 every
+ * class compared as 0.0, older than any copy on a disk. LibVersion is
+ * another file's constant, so the RomTag takes DT_VERSION, every class's
+ * version; tests/test-romtag.py checks each class's LibVersion, LibRevision
+ * and ID string against it. */
+#ifndef DT_VERSION
+#define DT_VERSION 47
+#endif
+
 const struct Resident dt_romtag __attribute__((used)) = {
     RTC_MATCHWORD,
     (struct Resident *)&dt_romtag,
     (APTR)(&dt_romtag + 1),
     RTF_AUTOINIT,
-    0,
+    DT_VERSION,
     NT_LIBRARY,
     0,
     (char *)LibName,
